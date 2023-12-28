@@ -8,7 +8,7 @@ pub struct Parser {
     m_token_iter: Peekable<std::vec::IntoIter<Token>>,
     m_current: Option<Token>,
     m_previous: Option<Token>,
-    m_errors: Vec<anyhow::Error>,
+    m_errors: Vec<String>,
 }
 
 impl Parser {
@@ -26,7 +26,7 @@ impl Parser {
     }
 
     fn take_next(&mut self) -> Option<Token> {
-        self.m_previous = self.m_current.clone();
+        self.m_previous = self.m_current.take();
         self.m_current = self.m_token_iter.next();
         self.m_current.clone()
     }
@@ -83,10 +83,10 @@ impl Parser {
 
             while !self.matches(&[TokenType::RightParen]) {
                 if let None = self.take_next() {
-                    self.m_errors.push(anyhow::anyhow!(
+                    self.m_errors.push(format!(
                         "Unterminated grouping, expected ')'\n    => line {} | column {}",
                         self.m_previous.as_ref().unwrap().get_line_number(),
-                        self.m_previous.as_ref().unwrap().get_token_range().start + 1
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
                     ));
                     return Err(anyhow::anyhow!(""));
                 }
@@ -98,21 +98,21 @@ impl Parser {
         }
 
         if let Some(token) = self.m_previous.as_ref() {
-            self.m_errors.push(anyhow::anyhow!(
+            self.m_errors.push(format!(
                 "Invalid operands, expected expression\n    => line {} | column {}",
                 token.get_line_number(),
-                token.get_token_range().start + 1
+                token.get_col_range().start + 1
             ));
         } else {
             if let Some(token) = self.m_current.as_ref() {
-                self.m_errors.push(anyhow::anyhow!(
+                self.m_errors.push(format!(
                     "Invalid operands, expected expression\n    => line {} | column {}",
                     token.get_line_number(),
-                    token.get_token_range().start + 1
+                    token.get_col_range().start + 1
                 ));
             } else {
                 self.m_errors
-                    .push(anyhow::anyhow!("Invalid operands, expected expression"));
+                    .push(format!("Invalid operands, expected expression"));
             }
         }
 
@@ -186,7 +186,7 @@ impl Parser {
         self.equality()
     }
 
-    pub fn parse(mut self) -> Result<Expr, Vec<anyhow::Error>> {
+    pub fn parse(mut self) -> Result<Expr, Vec<String>> {
         let expr = self.expression();
 
         if self.m_errors.is_empty() {

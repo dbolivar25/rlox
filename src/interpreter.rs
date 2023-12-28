@@ -12,16 +12,35 @@ impl Interpreter {
                 Ok(expr) => {
                     let mut visitor = Evaluator::new();
                     expr.accept(&mut visitor);
-                    println!("   {:?}", visitor.get_result());
+
+                    match visitor.get_result() {
+                        Ok(result) => println!("{:?}", result),
+                        Err(err) => {
+                            println!(
+                                "Runtime produced {} {}:",
+                                err.len(),
+                                if err.len() == 1 { "error" } else { "errors" }
+                            );
+                            err.iter().for_each(|err| println!("    ERROR: {}", &err));
+                        }
+                    }
                 }
                 Err(err) => {
-                    println!("Parser produced {} errors:", err.len());
-                    err.iter().for_each(|err| println!("    ERROR: {:?}", &err));
+                    println!(
+                        "Parser produced {} {}:",
+                        err.len(),
+                        if err.len() == 1 { "error" } else { "errors" },
+                    );
+                    err.iter().for_each(|err| println!("    ERROR: {}", &err));
                 }
             },
             Err(err) => {
-                println!("Lexer produced {} errors:", err.len());
-                err.iter().for_each(|err| println!("    ERROR: {:?}", &err));
+                println!(
+                    "Lexer produced {} {}:",
+                    err.len(),
+                    if err.len() == 1 { "error" } else { "errors" },
+                );
+                err.iter().for_each(|err| println!("    ERROR: {}", &err));
             }
         }
     }

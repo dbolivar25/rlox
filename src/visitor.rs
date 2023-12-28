@@ -1,10 +1,8 @@
-use itertools::Itertools;
-
-use crate::ast::Expr;
-use crate::lox_value::LoxValue;
+use crate::ast::*;
+use crate::lox_value::Value;
 use crate::token::*;
 
-pub trait Visitor {
+pub trait ExprVisitor {
     fn visit_binary(&mut self, left: &Expr, token: &Token, right: &Expr);
     fn visit_grouping(&mut self, expression: &Expr);
     fn visit_literal(&mut self, token: &Token);
@@ -21,9 +19,13 @@ impl Printer {
             m_content: Vec::new(),
         }
     }
+
+    pub fn get_result(&self) -> String {
+        self.m_content.join(" ")
+    }
 }
 
-impl Visitor for Printer {
+impl ExprVisitor for Printer {
     fn visit_binary(&mut self, left: &Expr, token: &Token, right: &Expr) {
         self.m_content.push("(".into());
         self.m_content
@@ -62,94 +64,85 @@ impl Visitor for Printer {
 }
 
 pub struct Evaluator {
-    m_result: Vec<LoxValue>,
+    m_result: Vec<Value>,
+    m_errors: Vec<String>,
 }
 
 impl Evaluator {
     pub fn new() -> Self {
         Self {
             m_result: Vec::new(),
+            m_errors: Vec::new(),
         }
     }
 
-    pub fn get_result(&self) -> LoxValue {
-        self.m_result.last().unwrap().clone()
+    pub fn get_result(&self) -> Result<Value, Vec<String>> {
+        if self.m_errors.is_empty() {
+            match self.m_result.last() {
+                Some(result) => Ok(result.clone()),
+                None => Err(vec!["No result".into()]),
+            }
+        } else {
+            Err(self.m_errors.clone())
+        }
     }
 }
 
-impl Visitor for Evaluator {
+impl ExprVisitor for Evaluator {
     fn visit_binary(&mut self, left: &Expr, token: &Token, right: &Expr) {
         left.accept(self);
         right.accept(self);
 
-        let right = self.m_result.pop().unwrap();
-        let left = self.m_result.pop().unwrap();
+        if !self.m_errors.is_empty() {
+            return;
+        }
 
-        match token.get_token_type() {
-            crate::token::TokenType::Plus => match left.as_number() {
-                Some(left_number) => match right.as_number() {
-                    Some(right_number) => {
-                        self.m_result
-                            .push(LoxValue::Number(left_number + right_number));
+        match (self.m_result.pop(), self.m_result.pop()) {
+            (Some(Value::Number(right)), Some(Value::Number(left))) => {
+                self.m_result.push(match token.get_token_type() {
+                    TokenType::Minus => Value::Number(left - right),
+                    TokenType::Plus => Value::Number(left + right),
+                    TokenType::Slash => Value::Number(left / right),
+                    TokenType::Star => Value::Number(left * right),
+                    TokenType::Greater => Value::Boolean(left > right),
+                    TokenType::GreaterEqual => Value::Boolean(left >= right),
+                    TokenType::Less => Value::Boolean(left < right),
+                    TokenType::LessEqual => Value::Boolean(left <= right),
+                    TokenType::BangEqual => Value::Boolean(left != right),
+                    TokenType::EqualEqual => Value::Boolean(left == right),
+                    token => {
+                        self.m_errors
+                            .push(format!("Invalid binary operator \"{:?}\"", token));
+                        Value::Nil
                     }
-                    None => {
-                        self.m_result.push(LoxValue::String(format!(
-                            "{}{}",
-                            left_number,
-                            right.as_string().unwrap()
-                        )));
+                });
+            }
+            (Some(Value::String(right)), Some(Value::String(left))) => {
+                self.m_result.push(match token.get_token_type() {
+                    TokenType::Plus => Value::String(format!("{}{}", left, right)),
+                    TokenType::Greater => Value::Boolean(left > right),
+                    TokenType::GreaterEqual => Value::Boolean(left >= right),
+                    TokenType::Less => Value::Boolean(left < right),
+                    TokenType::LessEqual => Value::Boolean(left <= right),
+                    TokenType::BangEqual => Value::Boolean(left != right),
+                    TokenType::EqualEqual => Value::Boolean(left == right),
+                    token => {
+                        self.m_errors
+                            .push(format!("Invalid binary operator \"{:?}\"", token));
+                        Value::Nil
                     }
-                },
-                None => {
-                    self.m_result.push(LoxValue::String(format!(
-                        "{}{}",
-                        left.as_string().unwrap(),
-                        right.as_string().unwrap()
-                    )));
-                }
-            },
-            crate::token::TokenType::Minus => {
-                self.m_result.push(LoxValue::Number(
-                    left.as_number().unwrap() - right.as_number().unwrap(),
+                });
+            }
+            (Some(right), Some(left)) => {
+                self.m_errors.push(format!(
+                    "Invalid binary expression \"{:?} {:?} {:?}\"",
+                    left, token, right
                 ));
             }
-            crate::token::TokenType::Star => {
-                self.m_result.push(LoxValue::Number(
-                    left.as_number().unwrap() * right.as_number().unwrap(),
-                ));
-            }
-            crate::token::TokenType::Slash => {
-                self.m_result.push(LoxValue::Number(
-                    left.as_number().unwrap() / right.as_number().unwrap(),
-                ));
-            }
-            crate::token::TokenType::Greater => {
-                self.m_result.push(LoxValue::Boolean(
-                    left.as_number().unwrap() > right.as_number().unwrap(),
-                ));
-            }
-            crate::token::TokenType::GreaterEqual => {
-                self.m_result.push(LoxValue::Boolean(
-                    left.as_number().unwrap() >= right.as_number().unwrap(),
-                ));
-            }
-            crate::token::TokenType::Less => {
-                self.m_result.push(LoxValue::Boolean(
-                    left.as_number().unwrap() < right.as_number().unwrap(),
-                ));
-            }
-            crate::token::TokenType::LessEqual => {
-                self.m_result.push(LoxValue::Boolean(
-                    left.as_number().unwrap() <= right.as_number().unwrap(),
-                ));
-            }
-            crate::token::TokenType::EqualEqual => {
-                self.m_result.push(LoxValue::Boolean(left == right));
-            }
-            crate::token::TokenType::BangEqual => {
-                self.m_result.push(LoxValue::Boolean(left != right));
-            }
-            _ => {}
+            (right, left) => self.m_errors.push(format!(
+                "Invalid binary expression \"{:?} {:?} {:?}\"",
+                left, token, right
+            )),
         }
     }
 
@@ -157,41 +150,76 @@ impl Visitor for Evaluator {
         expression.accept(self);
     }
 
+    fn visit_literal(&mut self, token: &Token) {
+        self.m_result.push(match token.get_token_type() {
+            TokenType::Number(number) => Value::Number(*number),
+            TokenType::String(string) => Value::String(string.clone()),
+            TokenType::True => Value::Boolean(true),
+            TokenType::False => Value::Boolean(false),
+            TokenType::Nil => Value::Nil,
+            token => {
+                self.m_errors
+                    .push(format!("Invalid literal expression \"{:?}\"", token));
+                Value::Nil
+            }
+        });
+    }
+
     fn visit_unary(&mut self, token: &Token, expression: &Expr) {
         expression.accept(self);
 
-        let value = self.m_result.pop().unwrap();
+        if !self.m_errors.is_empty() {
+            return;
+        }
 
-        match token.get_token_type() {
-            crate::token::TokenType::Minus => {
-                self.m_result
-                    .push(LoxValue::Number(-value.as_number().unwrap()));
+        match self.m_result.pop() {
+            Some(Value::Number(number)) => {
+                self.m_result.push(match token.get_token_type() {
+                    TokenType::Minus => Value::Number(-number),
+                    TokenType::Bang => {
+                        Value::Boolean(!Value::Number(number).is_equal(&Value::Number(0.0)))
+                    }
+                    token => {
+                        self.m_errors
+                            .push(format!("Invalid unary operator \"{:?}\"", token));
+                        Value::Nil
+                    }
+                });
             }
-            crate::token::TokenType::Bang => {
-                self.m_result.push(LoxValue::Boolean(!value.is_truthy()));
+            Some(Value::Boolean(boolean)) => {
+                self.m_result.push(match token.get_token_type() {
+                    TokenType::Bang => Value::Boolean(!boolean),
+                    token => {
+                        self.m_errors
+                            .push(format!("Invalid unary operator \"{:?}\"", token));
+                        Value::Nil
+                    }
+                });
             }
-            _ => {}
+            Some(value) => {
+                self.m_errors.push(format!(
+                    "Invalid unary expression \"{:?} {:?}\"",
+                    token, value
+                ));
+            }
+            None => {
+                self.m_errors.push(format!(
+                    "Invalid unary expression \"{:?} {:?}\"",
+                    token, self.m_result
+                ));
+            }
         }
     }
+}
 
-    fn visit_literal(&mut self, token: &Token) {
-        match token.get_token_type() {
-            crate::token::TokenType::Number(number) => {
-                self.m_result.push(LoxValue::Number(*number));
-            }
-            crate::token::TokenType::True => {
-                self.m_result.push(LoxValue::Boolean(true));
-            }
-            crate::token::TokenType::False => {
-                self.m_result.push(LoxValue::Boolean(false));
-            }
-            crate::token::TokenType::Nil => {
-                self.m_result.push(LoxValue::Nil);
-            }
-            crate::token::TokenType::String(string) => {
-                self.m_result.push(LoxValue::String(string.clone()));
-            }
-            _ => {}
-        }
-    }
+pub trait StmtVisitor {
+    fn visit_block(&mut self, statements: &[Stmt]);
+    fn visit_expression(&mut self, expression: &Expr);
+    fn visit_print(&mut self, expression: &Expr);
+    fn visit_var(&mut self, name: &Token, initializer: &Expr);
+    fn visit_while(&mut self, condition: &Expr, body: &Stmt);
+    fn visit_if(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Box<Stmt>>);
+    fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]);
+    fn visit_return(&mut self, keyword: &Token, value: &Option<Expr>);
+    fn visit_class(&mut self, name: &Token, methods: &[Stmt]);
 }

@@ -8,7 +8,7 @@ pub struct Lexer<'a> {
     m_chars: std::iter::Peekable<std::str::CharIndices<'a>>,
     m_line_number: usize,
     m_tokens: Vec<Token>,
-    m_errors: Vec<anyhow::Error>,
+    m_errors: Vec<String>,
 }
 
 impl<'a> Lexer<'a> {
@@ -21,7 +21,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn lex_token(&mut self) -> Result<Token> {
+    fn lex_token(&mut self) -> Result<Token, String> {
         return match self.m_chars.next() {
             Some((index, char)) => match char {
                 '\n' => {
@@ -198,7 +198,7 @@ impl<'a> Lexer<'a> {
                             Some((_, '\n')) => self.m_line_number += 1,
                             Some((_, char)) => lexeme.push(char),
                             None => {
-                                return Err(anyhow::anyhow!(
+                                return Err(format!(
                                     "Unterminated string \"{}\"\n           => line {} | column {}",
                                     lexeme,
                                     self.m_line_number,
@@ -275,18 +275,18 @@ impl<'a> Lexer<'a> {
                         self.m_line_number,
                     ))
                 }
-                bad_char => Err(anyhow::anyhow!(
-                    "Unexpected character \'{}\'\n           => line {} | column {}",
+                bad_char => Err(format!(
+                    "Unexpected character '{}'\n           => line {} | column {}",
                     bad_char,
                     self.m_line_number,
                     index + 1
                 )),
             },
-            None => Err(anyhow::anyhow!("Unexpected end of input")),
+            None => Err(format!("Unexpected end of input")),
         };
     }
 
-    pub fn tokenize(mut self) -> Result<Vec<Token>, Vec<anyhow::Error>> {
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, Vec<String>> {
         while let Some(_) = self.m_chars.peek() {
             match self.lex_token() {
                 Ok(token) if token.get_token_type() == &TokenType::Skip => {}
@@ -296,16 +296,16 @@ impl<'a> Lexer<'a> {
         }
 
         if self.m_errors.is_empty() {
-            // self.m_tokens.push(Token::new_token(
-            //     TokenType::EOF,
-            //     0,
-            //     0,
-            //     self.m_line_number,
-            // ));
+            self.m_tokens.push(Token::new_token(
+                TokenType::Eof,
+                0,
+                0,
+                self.m_line_number + 1,
+            ));
 
-            Ok(self.m_tokens)
+            Ok(self.m_tokens.clone())
         } else {
-            Err(self.m_errors)
+            Err(self.m_errors.clone())
         }
     }
 }
