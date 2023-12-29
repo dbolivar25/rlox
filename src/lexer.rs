@@ -7,6 +7,7 @@ use itertools::*;
 pub struct Lexer<'a> {
     m_chars: std::iter::Peekable<std::str::CharIndices<'a>>,
     m_line_number: usize,
+    m_last_line_index: usize,
     m_tokens: Vec<Token>,
     m_errors: Vec<String>,
 }
@@ -16,6 +17,7 @@ impl<'a> Lexer<'a> {
         Self {
             m_chars: input.char_indices().peekable(),
             m_line_number: 1,
+            m_last_line_index: 0,
             m_tokens: Vec::new(),
             m_errors: Vec::new(),
         }
@@ -26,6 +28,7 @@ impl<'a> Lexer<'a> {
             Some((index, char)) => match char {
                 '\n' => {
                     self.m_line_number += 1;
+                    self.m_last_line_index = index;
                     Ok(Token::new_token(
                         TokenType::Skip,
                         index,
@@ -35,67 +38,67 @@ impl<'a> Lexer<'a> {
                 }
                 ' ' | '\r' | '\t' => Ok(Token::new_token(
                     TokenType::Skip,
-                    index,
+                    index - self.m_last_line_index,
                     1,
                     self.m_line_number,
                 )),
                 '(' => Ok(Token::new_token(
                     TokenType::LeftParen,
-                    index,
+                    index - self.m_last_line_index,
                     1,
                     self.m_line_number,
                 )),
                 ')' => Ok(Token::new_token(
                     TokenType::RightParen,
-                    index,
+                    index - self.m_last_line_index,
                     1,
                     self.m_line_number,
                 )),
                 '{' => Ok(Token::new_token(
                     TokenType::LeftBrace,
-                    index,
+                    index - self.m_last_line_index,
                     1,
                     self.m_line_number,
                 )),
                 '}' => Ok(Token::new_token(
                     TokenType::RightBrace,
-                    index,
+                    index - self.m_last_line_index,
                     1,
                     self.m_line_number,
                 )),
                 ',' => Ok(Token::new_token(
                     TokenType::Comma,
-                    index,
+                    index - self.m_last_line_index,
                     1,
                     self.m_line_number,
                 )),
                 '.' => Ok(Token::new_token(
                     TokenType::Dot,
-                    index,
+                    index - self.m_last_line_index,
                     1,
                     self.m_line_number,
                 )),
                 '-' => Ok(Token::new_token(
                     TokenType::Minus,
-                    index,
+                    index - self.m_last_line_index,
                     1,
                     self.m_line_number,
                 )),
                 '+' => Ok(Token::new_token(
                     TokenType::Plus,
-                    index,
+                    index - self.m_last_line_index,
                     1,
                     self.m_line_number,
                 )),
                 ';' => Ok(Token::new_token(
                     TokenType::Semicolon,
-                    index,
+                    index - self.m_last_line_index,
                     1,
                     self.m_line_number,
                 )),
                 '*' => Ok(Token::new_token(
                     TokenType::Star,
-                    index,
+                    index - self.m_last_line_index,
                     1,
                     self.m_line_number,
                 )),
@@ -104,14 +107,14 @@ impl<'a> Lexer<'a> {
                         self.m_chars.next();
                         Ok(Token::new_token(
                             TokenType::BangEqual,
-                            index,
+                            index - self.m_last_line_index,
                             2,
                             self.m_line_number,
                         ))
                     }
                     _ => Ok(Token::new_token(
                         TokenType::Bang,
-                        index,
+                        index - self.m_last_line_index,
                         1,
                         self.m_line_number,
                     )),
@@ -121,7 +124,7 @@ impl<'a> Lexer<'a> {
                         self.m_chars.next();
                         Ok(Token::new_token(
                             TokenType::EqualEqual,
-                            index,
+                            index - self.m_last_line_index,
                             2,
                             self.m_line_number,
                         ))
@@ -138,14 +141,14 @@ impl<'a> Lexer<'a> {
                         self.m_chars.next();
                         Ok(Token::new_token(
                             TokenType::LessEqual,
-                            index,
+                            index - self.m_last_line_index,
                             2,
                             self.m_line_number,
                         ))
                     }
                     _ => Ok(Token::new_token(
                         TokenType::Less,
-                        index,
+                        index - self.m_last_line_index,
                         1,
                         self.m_line_number,
                     )),
@@ -155,14 +158,14 @@ impl<'a> Lexer<'a> {
                         self.m_chars.next();
                         Ok(Token::new_token(
                             TokenType::GreaterEqual,
-                            index,
+                            index - self.m_last_line_index,
                             2,
                             self.m_line_number,
                         ))
                     }
                     _ => Ok(Token::new_token(
                         TokenType::Greater,
-                        index,
+                        index - self.m_last_line_index,
                         1,
                         self.m_line_number,
                     )),
@@ -178,14 +181,14 @@ impl<'a> Lexer<'a> {
                         }
                         Ok(Token::new_token(
                             TokenType::Skip,
-                            index,
+                            index - self.m_last_line_index,
                             1,
                             self.m_line_number,
                         ))
                     }
                     _ => Ok(Token::new_token(
                         TokenType::Slash,
-                        index,
+                        index - self.m_last_line_index,
                         1,
                         self.m_line_number,
                     )),
@@ -195,14 +198,17 @@ impl<'a> Lexer<'a> {
                     loop {
                         match self.m_chars.next() {
                             Some((_, '"')) => break,
-                            Some((_, '\n')) => self.m_line_number += 1,
+                            Some((_, '\n')) => {
+                                self.m_line_number += 1;
+                                self.m_last_line_index = index;
+                            }
                             Some((_, char)) => lexeme.push(char),
                             None => {
                                 return Err(format!(
                                     "Unterminated string \"{}\"\n           => line {} | column {}",
                                     lexeme,
                                     self.m_line_number,
-                                    index + 1 + lexeme.len()
+                                    index - self.m_last_line_index + 1 + lexeme.len()
                                 ))
                             }
                         }
@@ -210,7 +216,7 @@ impl<'a> Lexer<'a> {
 
                     Ok(Token::new_token(
                         TokenType::String(lexeme.clone()),
-                        index,
+                        index - self.m_last_line_index,
                         lexeme.len() + 2,
                         self.m_line_number,
                     ))
@@ -250,7 +256,7 @@ impl<'a> Lexer<'a> {
 
                     Ok(Token::new_token(
                         TokenType::Number(parsed_float),
-                        index,
+                        index - self.m_last_line_index,
                         lexeme.len(),
                         self.m_line_number,
                     ))
@@ -270,7 +276,7 @@ impl<'a> Lexer<'a> {
 
                     Ok(Token::new_token(
                         TokenType::new_identifier(lexeme.clone()),
-                        index,
+                        index - self.m_last_line_index,
                         lexeme.len(),
                         self.m_line_number,
                     ))

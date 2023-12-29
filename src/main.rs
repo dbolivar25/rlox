@@ -5,6 +5,7 @@ mod lox_value;
 mod parser;
 mod token;
 mod visitor;
+mod environment;
 
 use interpreter::*;
 

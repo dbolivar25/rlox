@@ -1,3 +1,4 @@
+use crate::environment::*;
 use crate::lexer::*;
 use crate::parser::*;
 use crate::visitor::*;
@@ -10,12 +11,16 @@ impl Interpreter {
         match Lexer::new(&input).tokenize() {
             Ok(tokens) => match Parser::new(tokens).parse() {
                 Ok(stmts) => {
+                    let mut env: Option<Environment> = None;
                     for stmt in stmts.iter() {
-                        let mut visitor = StmtEvaluator::new();
+                        let mut visitor =
+                            StmtEvaluator::new(env.take().unwrap_or(Environment::new()));
                         stmt.accept(&mut visitor);
 
                         match visitor.get_result() {
-                            Ok(_) => {}
+                            Ok(result_env) => {
+                                env = Some(result_env);
+                            }
                             Err(err) => {
                                 println!(
                                     "Runtime produced {} {}:",

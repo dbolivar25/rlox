@@ -71,6 +71,10 @@ impl Parser {
             return Ok(Expr::new_literal(self.take_next().unwrap()));
         }
 
+        if self.matches(&[TokenType::Identifier("".into())]) {
+            return Ok(Expr::new_variable(self.take_next().unwrap()));
+        }
+
         if self.matches(&[TokenType::LeftParen]) {
             self.take_next();
             let expr = self.expression()?;
@@ -174,8 +178,30 @@ impl Parser {
         Ok(expr)
     }
 
+    fn assignment(&mut self) -> Result<Expr> {
+        let expr = self.equality()?;
+
+        if self.matches(&[TokenType::Equal]) {
+            let equals = self.take_next().unwrap();
+            let value = self.assignment()?;
+
+            if let Expr::Variable { m_token } = expr {
+                return Ok(Expr::new_assign(m_token, Box::new(value)));
+            }
+
+            self.m_errors.push(format!(
+                "Invalid assignment target\n    => line {} | column {}",
+                equals.get_line_number(),
+                equals.get_col_range().start + 1
+            ));
+            return Err(anyhow::anyhow!(""));
+        }
+
+        Ok(expr)
+    }
+
     fn expression(&mut self) -> Result<Expr> {
-        self.equality()
+        self.assignment()
     }
 
     fn statement(&mut self) -> Result<Stmt> {
@@ -210,6 +236,24 @@ impl Parser {
             return Ok(Stmt::new_print(expr));
         }
 
+        if self.matches(&[TokenType::LeftBrace]) {
+            self.take_next();
+            let mut statements = Vec::new();
+            while !self.matches(&[TokenType::RightBrace]) {
+                if self.peek_next().is_none() {
+                    self.m_errors.push(format!(
+                        "Unterminated block, expected '}}'\n    => line {} | column {}",
+                        self.m_previous.as_ref().unwrap().get_line_number(),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    return Err(anyhow::anyhow!(""));
+                }
+                statements.push(self.declaration()?);
+            }
+            self.take_next();
+            return Ok(Stmt::new_block(statements));
+        }
+
         let expr = self.expression()?;
         match self.take_next() {
             Some(token) => {
@@ -240,18 +284,71 @@ impl Parser {
         Ok(Stmt::new_expression(expr))
     }
 
+    fn declaration(&mut self) -> Result<Stmt> {
+        if self.matches(&[TokenType::Var]) {
+            self.take_next();
+            let name = self.take_next().unwrap();
+
+            if !matches!(name.get_token_type(), TokenType::Identifier(_)) {
+                self.m_errors.push(format!(
+                    "Expected identifier after 'var'\n    => line {} | column {}",
+                    name.get_line_number().saturating_sub(1),
+                    name.get_col_range().start + 1
+                ));
+                self.sync();
+            }
+
+            let initializer = if self.matches(&[TokenType::Equal]) {
+                self.take_next();
+                Some(self.expression()?)
+            } else {
+                None
+            };
+
+            match self.take_next() {
+                Some(token) => {
+                    if token.get_token_type() == &TokenType::Semicolon {
+                    } else {
+                        self.m_errors.push(format!(
+                            "Expected ';' after variable declaration\n    => line {} | column {}",
+                            token.get_line_number().saturating_sub(1),
+                            token.get_col_range().start + 1
+                        ));
+                        self.sync();
+                    }
+                }
+                None => {
+                    self.m_errors.push(format!(
+                        "Expected ';' after variable declaration\n    => line {} | column {}",
+                        self.m_previous
+                            .as_ref()
+                            .unwrap()
+                            .get_line_number()
+                            .saturating_sub(1),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    self.sync();
+                }
+            }
+
+            return Ok(Stmt::new_var(name, initializer));
+        }
+
+        self.statement()
+    }
+
     pub fn parse(mut self) -> Result<Vec<Stmt>, Vec<String>> {
         let mut statements = Vec::new();
         while self
             .peek_next()
             .is_some_and(|token| token.get_token_type() != &TokenType::Eof)
         {
-            if let Ok(stmt) = self.statement() {
+            if let Ok(stmt) = self.declaration() {
                 statements.push(stmt);
             }
         }
 
-        dbg!(&statements);
+        // dbg!(&statements);
 
         if self.m_errors.is_empty() {
             Ok(statements)

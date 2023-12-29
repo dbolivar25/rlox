@@ -44,15 +44,17 @@ define_ast!(
     grouping: Grouping(m_expression: Box<Expr>),
     literal: Literal(m_token: Token),
     unary: Unary(m_token: Token, m_expression: Box<Expr>),
+    variable: Variable(m_token: Token),
+    assign: Assign(m_token: Token, m_value: Box<Expr>),
 );
 
 define_ast!(
     Stmt,
     StmtVisitor,
-    // block: Block(m_statements: Vec<Stmt>),
+    block: Block(m_statements: Vec<Stmt>),
     expression: Expression(m_expression: Expr),
     print: Print(m_expression: Expr),
-    // var: Var(m_name: Token, m_initializer: Expr),
+    var: Var(m_name: Token, m_initializer: Option<Expr>),
     // r#while: While(m_condition: Expr, m_body: Box<Stmt>),
     // r#if: If(m_condition: Expr, m_then_branch: Box<Stmt>, m_else_branch: Option<Box<Stmt>>),
     // function: Function(m_name: Token, m_params: Vec<Token>, m_body: Vec<Stmt>),

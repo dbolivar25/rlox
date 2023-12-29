@@ -97,7 +97,7 @@ impl Display for TokenType {
                 TokenType::Super => "super".to_string(),
                 TokenType::This => "this".to_string(),
                 TokenType::True => "true".to_string(),
-                TokenType::Var => "var".to_string(),
+                TokenType::Var => "let".to_string(),
                 TokenType::While => "while".to_string(),
                 token => format!("{:?}", token),
             }
@@ -129,7 +129,7 @@ impl TokenType {
             "super" => TokenType::Super,
             "this" => TokenType::This,
             "true" => TokenType::True,
-            "var" => TokenType::Var,
+            "let" => TokenType::Var,
             "while" => TokenType::While,
             _ => TokenType::Identifier(lexeme),
         }
