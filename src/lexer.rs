@@ -170,7 +170,7 @@ impl<'a> Lexer<'a> {
                 '/' => match self.m_chars.peek() {
                     Some((_, '/')) => {
                         self.m_chars.next();
-                        while let Some((_, char)) = self.m_chars.next() {
+                        for (_, char) in self.m_chars.by_ref() {
                             if char == '\n' {
                                 self.m_line_number += 1;
                                 break;
@@ -282,12 +282,12 @@ impl<'a> Lexer<'a> {
                     index + 1
                 )),
             },
-            None => Err(format!("Unexpected end of input")),
+            None => Err("Unexpected end of input".to_string()),
         };
     }
 
     pub fn tokenize(&mut self) -> Result<Vec<Token>, Vec<String>> {
-        while let Some(_) = self.m_chars.peek() {
+        while self.m_chars.peek().is_some() {
             match self.lex_token() {
                 Ok(token) if token.get_token_type() == &TokenType::Skip => {}
                 Ok(token) => self.m_tokens.push(token),

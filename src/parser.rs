@@ -50,12 +50,12 @@ impl Parser {
             if token.get_token_type() == &TokenType::Semicolon {
                 return;
             }
-            match self.peek_next() {
-                Some(token) => match token.get_token_type() {
-                    TokenType::Return => return,
-                    _ => {}
-                },
-                None => {}
+
+            if self
+                .peek_next()
+                .is_some_and(|token| &TokenType::Return == token.get_token_type())
+            {
+                return;
             }
         }
     }
@@ -76,7 +76,7 @@ impl Parser {
             let expr = self.expression()?;
 
             while !self.matches(&[TokenType::RightParen]) {
-                if let None = self.take_next() {
+                if self.take_next().is_none() {
                     self.m_errors.push(format!(
                         "Unterminated grouping, expected ')'\n    => line {} | column {}",
                         self.m_previous.as_ref().unwrap().get_line_number(),
@@ -97,17 +97,15 @@ impl Parser {
                 token.get_line_number(),
                 token.get_col_range().start + 1
             ));
+        } else if let Some(token) = self.m_current.as_ref() {
+            self.m_errors.push(format!(
+                "Invalid operands, expected expression\n    => line {} | column {}",
+                token.get_line_number(),
+                token.get_col_range().start + 1
+            ));
         } else {
-            if let Some(token) = self.m_current.as_ref() {
-                self.m_errors.push(format!(
-                    "Invalid operands, expected expression\n    => line {} | column {}",
-                    token.get_line_number(),
-                    token.get_col_range().start + 1
-                ));
-            } else {
-                self.m_errors
-                    .push(format!("Invalid operands, expected expression"));
-            }
+            self.m_errors
+                .push("Invalid operands, expected expression".to_string());
         }
 
         Err(anyhow::anyhow!(""))
@@ -248,11 +246,12 @@ impl Parser {
             .peek_next()
             .is_some_and(|token| token.get_token_type() != &TokenType::Eof)
         {
-            match self.statement() {
-                Ok(stmt) => statements.push(stmt),
-                Err(_) => {}
+            if let Ok(stmt) = self.statement() {
+                statements.push(stmt);
             }
         }
+
+        dbg!(&statements);
 
         if self.m_errors.is_empty() {
             Ok(statements)
