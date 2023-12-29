@@ -1,3 +1,4 @@
+use crate::ast::*;
 use crate::lexer::*;
 use crate::parser::*;
 use crate::visitor::*;
@@ -9,19 +10,21 @@ impl Interpreter {
     pub fn interpret(input: String) {
         match Lexer::new(&input).tokenize() {
             Ok(tokens) => match Parser::new(tokens).parse() {
-                Ok(expr) => {
-                    let mut visitor = Evaluator::new();
-                    expr.accept(&mut visitor);
+                Ok(stmts) => {
+                    for stmt in stmts.iter() {
+                        let mut visitor = StmtEvaluator::new();
+                        stmt.accept(&mut visitor);
 
-                    match visitor.get_result() {
-                        Ok(result) => println!("{:?}", result),
-                        Err(err) => {
-                            println!(
-                                "Runtime produced {} {}:",
-                                err.len(),
-                                if err.len() == 1 { "error" } else { "errors" }
-                            );
-                            err.iter().for_each(|err| println!("    ERROR: {}", &err));
+                        match visitor.get_result() {
+                            Ok(_) => {}
+                            Err(err) => {
+                                println!(
+                                    "Runtime produced {} {}:",
+                                    err.len(),
+                                    if err.len() == 1 { "error" } else { "errors" }
+                                );
+                                err.iter().for_each(|err| println!("    ERROR: {}", &err));
+                            }
                         }
                     }
                 }

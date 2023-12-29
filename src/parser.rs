@@ -4,6 +4,7 @@ use crate::token::*;
 use anyhow::Result;
 use std::iter::Peekable;
 
+#[derive(Debug)]
 pub struct Parser {
     m_token_iter: Peekable<std::vec::IntoIter<Token>>,
     m_current: Option<Token>,
@@ -35,18 +36,12 @@ impl Parser {
         self.peek_next().is_some_and(|token| {
             types
                 .iter()
-                .map(|token_type| match token {
-                    Token {
-                        m_token: TokenType::Number(_),
-                        ..
-                    } => token_type == &TokenType::Number(0.0),
-                    Token {
-                        m_token: TokenType::String(_),
-                        ..
-                    } => token_type == &TokenType::String("".into()),
-                    _ => token_type == token.get_token_type(),
+                .any(|token_type| match (token.get_token_type(), token_type) {
+                    (TokenType::Number(_), TokenType::Number(_)) => true,
+                    (TokenType::String(_), TokenType::String(_)) => true,
+                    (TokenType::Identifier(_), TokenType::Identifier(_)) => true,
+                    (lhs, rhs) => lhs == rhs,
                 })
-                .any(|result| result)
         })
     }
 
@@ -55,7 +50,6 @@ impl Parser {
             if token.get_token_type() == &TokenType::Semicolon {
                 return;
             }
-
             match self.peek_next() {
                 Some(token) => match token.get_token_type() {
                     TokenType::Return => return,
@@ -186,11 +180,82 @@ impl Parser {
         self.equality()
     }
 
-    pub fn parse(mut self) -> Result<Expr, Vec<String>> {
-        let expr = self.expression();
+    fn statement(&mut self) -> Result<Stmt> {
+        if self.matches(&[TokenType::Print]) {
+            self.take_next();
+            let expr = self.expression()?;
+            match self.take_next() {
+                Some(token) => {
+                    if token.get_token_type() == &TokenType::Semicolon {
+                    } else {
+                        self.m_errors.push(format!(
+                            "Expected ';' after expression\n    => line {} | column {}",
+                            token.get_line_number().saturating_sub(1),
+                            token.get_col_range().start + 1
+                        ));
+                        self.sync();
+                    }
+                }
+                None => {
+                    self.m_errors.push(format!(
+                        "Expected ';' after expression\n    => line {} | column {}",
+                        self.m_previous
+                            .as_ref()
+                            .unwrap()
+                            .get_line_number()
+                            .saturating_sub(1),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    self.sync();
+                }
+            }
+            return Ok(Stmt::new_print(expr));
+        }
+
+        let expr = self.expression()?;
+        match self.take_next() {
+            Some(token) => {
+                if token.get_token_type() == &TokenType::Semicolon {
+                } else {
+                    self.m_errors.push(format!(
+                        "Expected ';' after expression\n    => line {} | column {}",
+                        token.get_line_number().saturating_sub(1),
+                        token.get_col_range().start + 1
+                    ));
+                    self.sync();
+                }
+            }
+            None => {
+                self.m_errors.push(format!(
+                    "Expected ';' after expression\n    => line {} | column {}",
+                    self.m_previous
+                        .as_ref()
+                        .unwrap()
+                        .get_line_number()
+                        .saturating_sub(1),
+                    self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                ));
+                self.sync();
+            }
+        }
+
+        Ok(Stmt::new_expression(expr))
+    }
+
+    pub fn parse(mut self) -> Result<Vec<Stmt>, Vec<String>> {
+        let mut statements = Vec::new();
+        while self
+            .peek_next()
+            .is_some_and(|token| token.get_token_type() != &TokenType::Eof)
+        {
+            match self.statement() {
+                Ok(stmt) => statements.push(stmt),
+                Err(_) => {}
+            }
+        }
 
         if self.m_errors.is_empty() {
-            Ok(expr.unwrap())
+            Ok(statements)
         } else {
             Err(self.m_errors)
         }

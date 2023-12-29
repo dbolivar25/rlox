@@ -9,11 +9,11 @@ pub trait ExprVisitor {
     fn visit_unary(&mut self, token: &Token, expression: &Expr);
 }
 
-pub struct Printer {
+pub struct ExprPrinter {
     m_content: Vec<String>,
 }
 
-impl Printer {
+impl ExprPrinter {
     pub fn new() -> Self {
         Self {
             m_content: Vec::new(),
@@ -25,7 +25,7 @@ impl Printer {
     }
 }
 
-impl ExprVisitor for Printer {
+impl ExprVisitor for ExprPrinter {
     fn visit_binary(&mut self, left: &Expr, token: &Token, right: &Expr) {
         self.m_content.push("(".into());
         self.m_content
@@ -63,12 +63,12 @@ impl ExprVisitor for Printer {
     }
 }
 
-pub struct Evaluator {
+pub struct ExprEvaluator {
     m_result: Vec<Value>,
     m_errors: Vec<String>,
 }
 
-impl Evaluator {
+impl ExprEvaluator {
     pub fn new() -> Self {
         Self {
             m_result: Vec::new(),
@@ -88,7 +88,7 @@ impl Evaluator {
     }
 }
 
-impl ExprVisitor for Evaluator {
+impl ExprVisitor for ExprEvaluator {
     fn visit_binary(&mut self, left: &Expr, token: &Token, right: &Expr) {
         left.accept(self);
         right.accept(self);
@@ -110,9 +110,9 @@ impl ExprVisitor for Evaluator {
                     TokenType::LessEqual => Value::Boolean(left <= right),
                     TokenType::BangEqual => Value::Boolean(left != right),
                     TokenType::EqualEqual => Value::Boolean(left == right),
-                    token => {
+                    token_type => {
                         self.m_errors
-                            .push(format!("Invalid binary operator \"{:?}\"", token));
+                            .push(format!("Invalid binary operator => {}", token_type));
                         Value::Nil
                     }
                 });
@@ -126,21 +126,21 @@ impl ExprVisitor for Evaluator {
                     TokenType::LessEqual => Value::Boolean(left <= right),
                     TokenType::BangEqual => Value::Boolean(left != right),
                     TokenType::EqualEqual => Value::Boolean(left == right),
-                    token => {
+                    token_type => {
                         self.m_errors
-                            .push(format!("Invalid binary operator \"{:?}\"", token));
+                            .push(format!("Invalid binary operator => {}", token_type));
                         Value::Nil
                     }
                 });
             }
             (Some(right), Some(left)) => {
                 self.m_errors.push(format!(
-                    "Invalid binary expression \"{:?} {:?} {:?}\"",
+                    "Invalid binary expression => {:?} {:?} {:?}",
                     left, token, right
                 ));
             }
             (right, left) => self.m_errors.push(format!(
-                "Invalid binary expression \"{:?} {:?} {:?}\"",
+                "Invalid binary expression => {:?} {:?} {:?}",
                 left, token, right
             )),
         }
@@ -159,7 +159,7 @@ impl ExprVisitor for Evaluator {
             TokenType::Nil => Value::Nil,
             token => {
                 self.m_errors
-                    .push(format!("Invalid literal expression \"{:?}\"", token));
+                    .push(format!("Invalid literal expression => {:?}", token));
                 Value::Nil
             }
         });
@@ -179,9 +179,9 @@ impl ExprVisitor for Evaluator {
                     TokenType::Bang => {
                         Value::Boolean(!Value::Number(number).is_equal(&Value::Number(0.0)))
                     }
-                    token => {
+                    token_type => {
                         self.m_errors
-                            .push(format!("Invalid unary operator \"{:?}\"", token));
+                            .push(format!("Invalid unary operator => {}", token_type));
                         Value::Nil
                     }
                 });
@@ -189,22 +189,22 @@ impl ExprVisitor for Evaluator {
             Some(Value::Boolean(boolean)) => {
                 self.m_result.push(match token.get_token_type() {
                     TokenType::Bang => Value::Boolean(!boolean),
-                    token => {
+                    token_type => {
                         self.m_errors
-                            .push(format!("Invalid unary operator \"{:?}\"", token));
+                            .push(format!("Invalid unary operator => {}", token_type));
                         Value::Nil
                     }
                 });
             }
             Some(value) => {
                 self.m_errors.push(format!(
-                    "Invalid unary expression \"{:?} {:?}\"",
+                    "Invalid unary expression => {:?} {:?}",
                     token, value
                 ));
             }
             None => {
                 self.m_errors.push(format!(
-                    "Invalid unary expression \"{:?} {:?}\"",
+                    "Invalid unary expression => {:?} {:?}",
                     token, self.m_result
                 ));
             }
@@ -213,13 +213,97 @@ impl ExprVisitor for Evaluator {
 }
 
 pub trait StmtVisitor {
-    fn visit_block(&mut self, statements: &[Stmt]);
+    // fn visit_block(&mut self, statements: &[Stmt]);
     fn visit_expression(&mut self, expression: &Expr);
     fn visit_print(&mut self, expression: &Expr);
-    fn visit_var(&mut self, name: &Token, initializer: &Expr);
-    fn visit_while(&mut self, condition: &Expr, body: &Stmt);
-    fn visit_if(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Box<Stmt>>);
-    fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]);
-    fn visit_return(&mut self, keyword: &Token, value: &Option<Expr>);
-    fn visit_class(&mut self, name: &Token, methods: &[Stmt]);
+    // fn visit_var(&mut self, name: &Token, initializer: &Expr);
+    // fn visit_while(&mut self, condition: &Expr, body: &Stmt);
+    // fn visit_if(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Box<Stmt>>);
+    // fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]);
+    // fn visit_return(&mut self, keyword: &Token, value: &Option<Expr>);
+    // fn visit_class(&mut self, name: &Token, methods: &[Stmt]);
+}
+
+pub struct StmtPrinter {
+    m_content: Vec<String>,
+    m_errors: Vec<String>,
+}
+
+impl StmtPrinter {
+    pub fn new() -> Self {
+        Self {
+            m_content: Vec::new(),
+            m_errors: Vec::new(),
+        }
+    }
+
+    pub fn get_result(&self) -> Result<String, Vec<String>> {
+        if self.m_errors.is_empty() {
+            Ok(self.m_content.join(" "))
+        } else {
+            Err(self.m_errors.clone())
+        }
+    }
+}
+
+impl StmtVisitor for StmtPrinter {
+    fn visit_expression(&mut self, expression: &Expr) {
+        let mut visitor = ExprPrinter::new();
+        self.m_content.push("(".into());
+        self.m_content.push("Expression".into());
+        expression.accept(&mut visitor);
+        self.m_content.push(visitor.get_result());
+        self.m_content.push(")".into());
+    }
+
+    fn visit_print(&mut self, expression: &Expr) {
+        let mut visitor = ExprPrinter::new();
+        self.m_content.push("(".into());
+        self.m_content.push("Print".into());
+        expression.accept(&mut visitor);
+        self.m_content.push(visitor.get_result());
+        self.m_content.push(")".into());
+    }
+}
+
+pub struct StmtEvaluator {
+    m_errors: Vec<String>,
+}
+
+impl StmtEvaluator {
+    pub fn new() -> Self {
+        Self {
+            m_errors: Vec::new(),
+        }
+    }
+
+    pub fn get_result(&self) -> Result<(), Vec<String>> {
+        if self.m_errors.is_empty() {
+            Ok(())
+        } else {
+            Err(self.m_errors.clone())
+        }
+    }
+}
+
+impl StmtVisitor for StmtEvaluator {
+    fn visit_expression(&mut self, expression: &Expr) {
+        let mut visitor = ExprEvaluator::new();
+        expression.accept(&mut visitor);
+        match visitor.get_result() {
+            Ok(result) => {}
+            Err(err) => self.m_errors.push(err.join("\n")),
+        }
+    }
+
+    fn visit_print(&mut self, expression: &Expr) {
+        let mut visitor = ExprEvaluator::new();
+        expression.accept(&mut visitor);
+        match visitor.get_result() {
+            Ok(result) => {
+                println!("{:?}", result)
+            }
+            Err(err) => self.m_errors.push(err.join("\n")),
+        }
+    }
 }
