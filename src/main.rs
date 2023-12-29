@@ -1,7 +1,7 @@
 mod ast;
 mod interpreter;
 mod lexer;
-mod lox_value;
+mod value;
 mod parser;
 mod token;
 mod visitor;

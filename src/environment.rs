@@ -1,4 +1,4 @@
-use crate::lox_value::Value;
+use crate::value::Value;
 
 use std::collections::HashMap;
 

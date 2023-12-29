@@ -1,6 +1,6 @@
 use crate::ast::*;
 use crate::environment::Environment;
-use crate::lox_value::Value;
+use crate::value::Value;
 use crate::token::*;
 
 pub trait ExprVisitor {
