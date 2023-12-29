@@ -291,7 +291,7 @@ impl StmtVisitor for StmtEvaluator {
         let mut visitor = ExprEvaluator::new();
         expression.accept(&mut visitor);
         match visitor.get_result() {
-            Ok(result) => {}
+            Ok(_) => {}
             Err(err) => self.m_errors.push(err.join("\n")),
         }
     }
