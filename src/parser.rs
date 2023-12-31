@@ -178,8 +178,32 @@ impl Parser {
         Ok(expr)
     }
 
+    fn and(&mut self) -> Result<Expr> {
+        let mut expr = self.equality()?;
+
+        while self.matches(&[TokenType::And]) {
+            let operator = self.take_next().unwrap();
+            let right = self.equality()?;
+            expr = Expr::new_logical(Box::new(expr), operator, Box::new(right));
+        }
+
+        Ok(expr)
+    }
+
+    fn or(&mut self) -> Result<Expr> {
+        let mut expr = self.and()?;
+
+        while self.matches(&[TokenType::Or]) {
+            let operator = self.take_next().unwrap();
+            let right = self.and()?;
+            expr = Expr::new_logical(Box::new(expr), operator, Box::new(right));
+        }
+
+        Ok(expr)
+    }
+
     fn assignment(&mut self) -> Result<Expr> {
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.matches(&[TokenType::Equal]) {
             let equals = self.take_next().unwrap();
@@ -254,6 +278,152 @@ impl Parser {
             return Ok(Stmt::new_block(statements));
         }
 
+        if self.matches(&[TokenType::If]) {
+            self.take_next();
+            if self.matches(&[TokenType::LeftParen]) {
+                self.take_next();
+                let condition = self.expression()?;
+                if self.matches(&[TokenType::RightParen]) {
+                    self.take_next();
+                    let then_branch = Box::new(self.statement()?);
+                    let else_branch = if self.matches(&[TokenType::Else]) {
+                        self.take_next();
+                        Some(Box::new(self.statement()?))
+                    } else {
+                        None
+                    };
+                    return Ok(Stmt::new_if(condition, then_branch, else_branch));
+                } else {
+                    self.m_errors.push(format!(
+                        "Expected ')' after if condition\n    => line {} | column {}",
+                        self.m_previous.as_ref().unwrap().get_line_number(),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    return Err(anyhow::anyhow!(""));
+                }
+            } else {
+                self.m_errors.push(format!(
+                    "Expected '(' after 'if'\n    => line {} | column {}",
+                    self.m_previous.as_ref().unwrap().get_line_number(),
+                    self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                ));
+                return Err(anyhow::anyhow!(""));
+            }
+        }
+
+        if self.matches(&[TokenType::While]) {
+            self.take_next();
+            if self.matches(&[TokenType::LeftParen]) {
+                self.take_next();
+                let condition = self.expression()?;
+                if self.matches(&[TokenType::RightParen]) {
+                    self.take_next();
+                    let body = Box::new(self.statement()?);
+                    return Ok(Stmt::new_while(condition, body));
+                } else {
+                    self.m_errors.push(format!(
+                        "Expected ')' after while condition\n    => line {} | column {}",
+                        self.m_previous.as_ref().unwrap().get_line_number(),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    return Err(anyhow::anyhow!(""));
+                }
+            } else {
+                self.m_errors.push(format!(
+                    "Expected '(' after 'while'\n    => line {} | column {}",
+                    self.m_previous.as_ref().unwrap().get_line_number(),
+                    self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                ));
+                return Err(anyhow::anyhow!(""));
+            }
+        }
+
+        if self.matches(&[TokenType::For]) {
+            self.take_next();
+            if self.matches(&[TokenType::LeftParen]) {
+                self.take_next();
+                let initializer = if self.matches(&[TokenType::Semicolon]) {
+                    None
+                } else if self.matches(&[TokenType::Var]) {
+                    Some(self.declaration()?)
+                } else {
+                    let expr = self.expression()?;
+                    if self.matches(&[TokenType::Semicolon]) {
+                        self.take_next();
+                    } else {
+                        self.m_errors.push(format!(
+                            "Expected ';' after for loop initializer\n    => line {} | column {}",
+                            self.m_previous.as_ref().unwrap().get_line_number(),
+                            self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                        ));
+                        return Err(anyhow::anyhow!(""));
+                    }
+
+                    Some(Stmt::new_expression(expr))
+                };
+
+                let condition = if self.matches(&[TokenType::Semicolon]) {
+                    None
+                } else {
+                    Some(self.expression()?)
+                };
+
+                if self.matches(&[TokenType::Semicolon]) {
+                    self.take_next();
+                } else {
+                    self.m_errors.push(format!(
+                        "Expected ';' after for loop condition\n    => line {} | column {}",
+                        self.m_previous.as_ref().unwrap().get_line_number(),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    return Err(anyhow::anyhow!(""));
+                }
+
+                let increment = if self.matches(&[TokenType::RightParen]) {
+                    None
+                } else {
+                    Some(self.expression()?)
+                };
+
+                if self.matches(&[TokenType::RightParen]) {
+                    self.take_next();
+                } else {
+                    self.m_errors.push(format!(
+                        "Expected ')' after for loop increment\n    => line {} | column {}",
+                        self.m_previous.as_ref().unwrap().get_line_number(),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    return Err(anyhow::anyhow!(""));
+                }
+
+                let mut body = Box::new(self.statement()?);
+
+                if let Some(increment) = increment {
+                    body = Box::new(Stmt::new_block(vec![
+                        *body,
+                        Stmt::new_expression(increment),
+                    ]));
+                }
+
+                if let Some(condition) = condition {
+                    body = Box::new(Stmt::new_while(condition, body));
+                }
+
+                if let Some(initializer) = initializer {
+                    body = Box::new(Stmt::new_block(vec![initializer, *body]));
+                }
+
+                return Ok(*body);
+            } else {
+                self.m_errors.push(format!(
+                    "Expected '(' after 'for'\n    => line {} | column {}",
+                    self.m_previous.as_ref().unwrap().get_line_number(),
+                    self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                ));
+                return Err(anyhow::anyhow!(""));
+            }
+        }
+
         let expr = self.expression()?;
         match self.take_next() {
             Some(token) => {
@@ -264,7 +434,7 @@ impl Parser {
                         token.get_line_number().saturating_sub(1),
                         token.get_col_range().start + 1
                     ));
-                    self.sync();
+                    return Err(anyhow::anyhow!(""));
                 }
             }
             None => {
@@ -277,7 +447,7 @@ impl Parser {
                         .saturating_sub(1),
                     self.m_previous.as_ref().unwrap().get_col_range().start + 1
                 ));
-                self.sync();
+                return Err(anyhow::anyhow!(""));
             }
         }
 
@@ -295,7 +465,7 @@ impl Parser {
                     name.get_line_number().saturating_sub(1),
                     name.get_col_range().start + 1
                 ));
-                self.sync();
+                return Err(anyhow::anyhow!(""));
             }
 
             let initializer = if self.matches(&[TokenType::Equal]) {
@@ -314,7 +484,7 @@ impl Parser {
                             token.get_line_number().saturating_sub(1),
                             token.get_col_range().start + 1
                         ));
-                        self.sync();
+                        return Err(anyhow::anyhow!(""));
                     }
                 }
                 None => {
@@ -327,7 +497,7 @@ impl Parser {
                             .saturating_sub(1),
                         self.m_previous.as_ref().unwrap().get_col_range().start + 1
                     ));
-                    self.sync();
+                    return Err(anyhow::anyhow!(""));
                 }
             }
 
@@ -345,6 +515,8 @@ impl Parser {
         {
             if let Ok(stmt) = self.declaration() {
                 statements.push(stmt);
+            } else {
+                self.sync();
             }
         }
 

@@ -176,6 +176,7 @@ impl<'a> Lexer<'a> {
                         for (_, char) in self.m_chars.by_ref() {
                             if char == '\n' {
                                 self.m_line_number += 1;
+                                self.m_last_line_index = index;
                                 break;
                             }
                         }

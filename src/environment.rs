@@ -2,7 +2,7 @@ use crate::value::Value;
 
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Environment {
     m_scopes: Vec<HashMap<String, Value>>,
 }

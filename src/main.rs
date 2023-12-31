@@ -28,13 +28,14 @@ impl App {
     pub fn run_file_interpreter(file: String) -> Result<()> {
         let file_string = fs::read_to_string(file)?;
 
-        Interpreter::interpret(file_string);
+        Interpreter::new().interpret(file_string);
 
         Ok(())
     }
 
     pub fn run_repl_interpreter() -> Result<()> {
         let mut input = String::new();
+        let mut interpreter = Interpreter::new();
 
         loop {
             print!("\n|>  ");
@@ -43,7 +44,7 @@ impl App {
 
             match input.trim() {
                 "" | "q" | "quit" => break,
-                input => Interpreter::interpret(input.into()),
+                input => interpreter.interpret(input.into()),
             }
 
             input.clear();
