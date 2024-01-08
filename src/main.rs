@@ -12,7 +12,6 @@ use interpreter::*;
 use anyhow::Result;
 use clap::Parser;
 use std::{fs, io::Write};
-use std::env;
 
 // argument parser
 #[derive(Parser, Debug)]
