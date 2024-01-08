@@ -12,6 +12,7 @@ use interpreter::*;
 use anyhow::Result;
 use clap::Parser;
 use std::{fs, io::Write};
+use std::env;
 
 // argument parser
 #[derive(Parser, Debug)]
@@ -55,6 +56,7 @@ impl App {
 }
 
 fn main() -> Result<()> {
+    env::set_var("RUST_BACKTRACE", "1");
     let args = Args::parse();
 
     match args.file {

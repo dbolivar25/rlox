@@ -1,7 +1,7 @@
 use crate::ast::*;
 use crate::environment::Environment;
 use crate::token::*;
-use crate::value::Value;
+use crate::value::*;
 
 pub trait ExprVisitor {
     fn visit_binary(&mut self, left: &Expr, token: &Token, right: &Expr);
@@ -11,7 +11,7 @@ pub trait ExprVisitor {
     fn visit_variable(&mut self, token: &Token);
     fn visit_assign(&mut self, token: &Token, expression: &Expr);
     fn visit_logical(&mut self, left: &Expr, token: &Token, right: &Expr);
-    // fn visit_call(&mut self, callee: &Expr, paren: &Token, arguments: &[Expr]);
+    fn visit_call(&mut self, callee: &Expr, paren: &Token, arguments: &[Expr]);
 }
 
 pub struct ExprPrinter {
@@ -89,16 +89,16 @@ impl ExprVisitor for ExprPrinter {
         self.m_content.push(")".into());
     }
 
-    // fn visit_call(&mut self, callee: &Expr, paren: &Token, arguments: &[Expr]) {
-    //     self.m_content.push("(".into());
-    //     self.m_content.push("Call".into());
-    //     callee.accept(self);
-    //     self.m_content.push(format!("{:?}", paren.get_token_type()));
-    //     for argument in arguments.iter() {
-    //         argument.accept(self);
-    //     }
-    //     self.m_content.push(")".into());
-    // }
+    fn visit_call(&mut self, callee: &Expr, paren: &Token, arguments: &[Expr]) {
+        self.m_content.push("(".into());
+        self.m_content.push("Call".into());
+        callee.accept(self);
+        self.m_content.push(format!("{:?}", paren.get_token_type()));
+        for argument in arguments.iter() {
+            argument.accept(self);
+        }
+        self.m_content.push(")".into());
+    }
 }
 
 pub struct ExprEvaluator<'a> {
@@ -368,6 +368,56 @@ impl ExprVisitor for ExprEvaluator<'_> {
             }
         }
     }
+
+    fn visit_call(&mut self, callee: &Expr, paren: &Token, arguments: &[Expr]) {
+        callee.accept(self);
+
+        if !self.m_errors.is_empty() {
+            return;
+        }
+
+        let callee = match self.m_result.pop() {
+            Some(callee) => callee,
+            None => {
+                self.m_errors.push(format!(
+                    "Invalid call expression => {:?}",
+                    callee
+                ));
+                return;
+            }
+        };
+
+        let mut arguments = arguments.to_vec();
+        for argument in arguments.iter_mut() {
+            argument.accept(self);
+
+            if !self.m_errors.is_empty() {
+                return;
+            }
+        }
+
+        let arguments = self.m_result.split_off(self.m_result.len() - arguments.len());
+
+        match callee {
+            Value::Callable(callable) => {
+                if callable.arity() != arguments.len() {
+                    self.m_errors.push(format!(
+                        "Invalid call expression => {:?}{:?}",
+                        callable, arguments
+                    ));
+                    return;
+                }
+
+                self.m_result.push(callable.call(arguments));
+            }
+            callee => {
+                self.m_errors.push(format!(
+                    "Invalid call expression => {:?}",
+                    callee
+                ));
+            }
+        }
+    }
 }
 
 pub trait StmtVisitor {
@@ -477,6 +527,24 @@ impl StmtVisitor for StmtPrinter {
         }
         self.m_content.push(")".into());
     }
+
+    // fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
+    //     self.m_content.push("(".into());
+    //     self.m_content.push("Function".into());
+    //     self.m_content.push(format!("{:?}", name));
+    //     for param in params.iter() {
+    //         self.m_content.push(format!("{:?}", param));
+    //     }
+    //     for stmt in body.iter() {
+    //         let mut visitor = StmtPrinter::new();
+    //         stmt.accept(&mut visitor);
+    //         match visitor.get_result() {
+    //             Ok(result) => self.m_content.push(result),
+    //             Err(err) => self.m_errors.push(err.join("\n")),
+    //         }
+    //     }
+    //     self.m_content.push(")".into());
+    // }
 }
 
 pub struct StmtEvaluator {
@@ -492,11 +560,11 @@ impl StmtEvaluator {
         }
     }
 
-    pub fn get_result(&mut self) -> Result<Option<Environment>, Vec<String>> {
+    pub fn get_result(&mut self) -> Result<Option<Environment>, (Vec<String>, Option<Environment>)> {
         if self.m_errors.is_empty() {
             Ok(self.m_env.take())
         } else {
-            Err(self.m_errors.clone())
+            Err((self.m_errors.clone(), self.m_env.take()))
         }
     }
 }
@@ -511,7 +579,7 @@ impl StmtVisitor for StmtEvaluator {
                 Ok(result_env) => {
                     self.m_env = result_env;
                 }
-                Err(err) => self.m_errors.push(err.join("\n")),
+                Err(err) => self.m_errors.push(err.0.join("\n")),
             }
         }
         self.m_env.as_mut().unwrap().drop_scope();
@@ -531,7 +599,7 @@ impl StmtVisitor for StmtEvaluator {
         expression.accept(&mut visitor);
         match visitor.get_result() {
             Ok(result) => {
-                println!("{:?}", result)
+                println!("{}", result)
             }
             Err(err) => self.m_errors.push(err.join("\n")),
         }
@@ -565,7 +633,7 @@ impl StmtVisitor for StmtEvaluator {
                         Ok(result_env) => {
                             self.m_env = result_env;
                         }
-                        Err(err) => self.m_errors.push(err.join("\n")),
+                        Err(err) => self.m_errors.push(err.0.join("\n")),
                     }
                     self.m_env.as_mut().unwrap().drop_scope();
                 } else if let Some(else_branch) = else_branch {
@@ -576,7 +644,7 @@ impl StmtVisitor for StmtEvaluator {
                         Ok(result_env) => {
                             self.m_env = result_env;
                         }
-                        Err(err) => self.m_errors.push(err.join("\n")),
+                        Err(err) => self.m_errors.push(err.0.join("\n")),
                     }
                     self.m_env.as_mut().unwrap().drop_scope();
                 }
@@ -604,9 +672,40 @@ impl StmtVisitor for StmtEvaluator {
                 Ok(result_env) => {
                     self.m_env = result_env;
                 }
-                Err(err) => self.m_errors.push(err.join("\n")),
+                Err(err) => self.m_errors.push(err.0.join("\n")),
             }
             self.m_env.as_mut().unwrap().drop_scope();
         }
     }
+    
+    // fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
+    //     let mut visitor = ExprEvaluator::new(self.m_env.as_mut().unwrap());
+    //     let mut callable = Callable::new(self.m_env.as_mut().unwrap().clone(), params.len(), Box::new(|_| Value::Nil));
+    //     callable.m_call = Box::new(|arguments| {
+    //         let mut env = Environment::new();
+    //         for (param, argument) in params.iter().zip(arguments.iter()) {
+    //             env.define(param.get_token_type().to_string().as_str(), argument.clone());
+    //         }
+    //         let mut visitor = StmtEvaluator::new(Some(env));
+    //         for stmt in body.iter() {
+    //             stmt.accept(&mut visitor);
+    //         }
+    //         match visitor.get_result() {
+    //             Ok(result_env) => {
+    //                 if let Some(result_env) = result_env {
+    //                     if let Some(result) = result_env.get("return") {
+    //                         return result.clone();
+    //                     }
+    //                 }
+    //                 Value::Nil
+    //             }
+    //             Err(err) => {
+    //                 println!("Runtime produced {} {}:", err.len(), if err.len() == 1 { "error" } else { "errors" });
+    //                 err.iter().for_each(|err| println!("    ERROR: {}", &err));
+    //                 Value::Nil
+    //             }
+    //         }
+    //     });
+    //     self.m_env.as_mut().unwrap().define(name.get_token_type().to_string().as_str(), Value::Callable(callable));
+    // }
 }

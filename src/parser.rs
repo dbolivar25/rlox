@@ -115,6 +115,77 @@ impl Parser {
         Err(anyhow::anyhow!(""))
     }
 
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr> {
+        let mut arguments = Vec::new();
+
+        if !self.matches(&[TokenType::RightParen]) {
+            loop {
+                if arguments.len() >= 255 {
+                    self.m_errors.push(format!(
+                        "Cannot have more than 255 arguments\n    => line {} | column {}",
+                        self.m_previous.as_ref().unwrap().get_line_number(),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    return Err(anyhow::anyhow!(""));
+                }
+
+                arguments.push(self.expression()?);
+
+                if !self.matches(&[TokenType::Comma]) {
+                    break;
+                }
+
+                self.take_next();
+            }
+        }
+
+        match self.take_next() {
+            Some(token) => {
+                if token.get_token_type() == &TokenType::RightParen {
+                    return Ok(Expr::new_call(
+                        Box::new(callee),
+                        token,
+                        arguments.into_iter().collect(),
+                    ));
+                } else {
+                    self.m_errors.push(format!(
+                        "Expected ')' after arguments\n    => line {} | column {}",
+                        token.get_line_number().saturating_sub(1),
+                        token.get_col_range().start + 1
+                    ));
+                    return Err(anyhow::anyhow!(""));
+                }
+            }
+            None => {
+                self.m_errors.push(format!(
+                    "Expected ')' after arguments\n    => line {} | column {}",
+                    self.m_previous
+                        .as_ref()
+                        .unwrap()
+                        .get_line_number()
+                        .saturating_sub(1),
+                    self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                ));
+                return Err(anyhow::anyhow!(""));
+            }
+        }
+    }
+
+    fn call(&mut self) -> Result<Expr> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.matches(&[TokenType::LeftParen]) {
+                self.take_next();
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
     fn unary(&mut self) -> Result<Expr> {
         if self.matches(&[TokenType::Bang, TokenType::Minus]) {
             let operator = self.take_next().unwrap();
@@ -122,7 +193,7 @@ impl Parser {
             return Ok(Expr::new_unary(operator, Box::new(right)));
         }
 
-        self.primary()
+        self.call()
     }
 
     fn factor(&mut self) -> Result<Expr> {

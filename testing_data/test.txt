@@ -1,3 +1,23 @@
-// this is a comment
-(( )){} // grouping stuff
-!*+-/=<> <= == // operators
+
+let for_start = clock();
+// for loop
+for (let i = 0; i < 10000; i = i + 1) {
+  print i;
+}
+let for_time = clock() - for_start;
+
+let while_start = clock();
+// desugared for loop
+{
+  let i = 0;
+  while (i < 10000) {
+    print i;
+    i = i + 1;
+  }
+}
+let while_time = clock() - while_start;
+
+print "for loop time for 10,000 iterations: ";
+print for_time;
+print "while loop time for 10,000 iterations: ";
+print while_time;

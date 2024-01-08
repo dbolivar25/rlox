@@ -47,7 +47,7 @@ define_ast!(
     variable: Variable(m_token: Token),
     assign: Assign(m_token: Token, m_value: Box<Expr>),
     logical: Logical(m_left: Box<Expr>, m_token: Token, m_right: Box<Expr>),
-    // call: Call(m_callee: Box<Expr>, m_paren: Token, m_arguments: Vec<Expr>),
+    call: Call(m_callee: Box<Expr>, m_paren: Token, m_arguments: Vec<Expr>),
 );
 
 define_ast!(

@@ -1,8 +1,47 @@
-#[derive(Clone, PartialEq)]
+use crate::environment::Environment;
+use std::fmt::{Debug, Display};
+
+#[derive(Clone)]
+pub struct Callable {
+    m_env: Option<Environment>,
+    m_arity: usize,
+    m_call: Box<fn(Vec<Value>) -> Value>,
+}
+
+impl Callable {
+    pub fn new(
+        env: Option<Environment>,
+        arity: usize,
+        call: Box<fn(Vec<Value>) -> Value>,
+    ) -> Callable {
+        Callable {
+            m_env: env,
+            m_arity: arity,
+            m_call: call,
+        }
+    }
+
+    pub fn call(&self, arguments: Vec<Value>) -> Value {
+        (self.m_call)(arguments)
+    }
+
+    pub fn arity(&self) -> usize {
+        self.m_arity
+    }
+}
+
+impl Debug for Callable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<callable>")
+    }
+}
+
+#[derive(Clone)]
 pub enum Value {
     Number(f64),
     String(String),
     Boolean(bool),
+    Callable(Callable),
     Nil,
 }
 
@@ -94,7 +133,17 @@ impl std::fmt::Debug for Value {
             Value::Number(number) => write!(f, "{}", number),
             Value::String(string) => write!(f, "\"{}\"", string),
             Value::Boolean(boolean) => write!(f, "{}", boolean),
+            Value::Callable(_callable) => write!(f, "<function>",),
             Value::Nil => write!(f, "nil"),
+        }
+    }
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::String(string) => write!(f, "{}", string),
+            other => write!(f, "{:?}", other),
         }
     }
 }
