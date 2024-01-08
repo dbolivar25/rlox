@@ -56,7 +56,6 @@ impl App {
 }
 
 fn main() -> Result<()> {
-    env::set_var("RUST_BACKTRACE", "1");
     let args = Args::parse();
 
     match args.file {
