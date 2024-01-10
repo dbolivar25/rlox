@@ -577,16 +577,26 @@ impl Parser {
 
         if self.matches(&[TokenType::Fun]) {
             self.take_next();
-            let name = self.take_next().unwrap();
+            let name =
+                if let TokenType::Identifier(_) = self.peek_next().unwrap().get_token_type() {
+                    self.take_next().unwrap()
+                } else {
+                    self.m_errors.push(format!(
+                        "Expected identifier after 'fun'\n    => line {} | column {}",
+                        self.m_previous.as_ref().unwrap().get_line_number(),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    return Err(anyhow::anyhow!(""));
+                };
 
-            if !matches!(name.get_token_type(), TokenType::Identifier(_)) {
-                self.m_errors.push(format!(
-                    "Expected identifier after 'fun'\n    => line {} | column {}",
-                    name.get_line_number().saturating_sub(1),
-                    name.get_col_range().start + 1
-                ));
-                return Err(anyhow::anyhow!(""));
-            }
+            // if !matches!(name.get_token_type(), TokenType::Identifier(_)) {
+            //     self.m_errors.push(format!(
+            //         "Expected identifier after 'fun'\n    => line {} | column {}",
+            //         name.get_line_number().saturating_sub(1),
+            //         name.get_col_range().start + 1
+            //     ));
+            //     return Err(anyhow::anyhow!(""));
+            // }
 
             if self.matches(&[TokenType::LeftParen]) {
                 self.take_next();
@@ -625,7 +635,17 @@ impl Parser {
 
                 if self.matches(&[TokenType::LeftBrace]) {
                     let body = self.statement()?;
-                    let body = vec![body];
+                    let body = match body {
+                        Stmt::Block { m_statements } => m_statements,
+                        _ => {
+                            self.m_errors.push(format!(
+                                "Expected block after function declaration\n    => line {} | column {}",
+                                self.m_previous.as_ref().unwrap().get_line_number(),
+                                self.m_previous.as_ref().unwrap().get_col_range().start + 1,
+                            ));
+                            return Err(anyhow::anyhow!(""));
+                        }
+                    };
                     return Ok(Stmt::new_function(name, parameters, body));
                 } else {
                     self.m_errors.push(format!(
@@ -643,6 +663,44 @@ impl Parser {
                 ));
                 return Err(anyhow::anyhow!(""));
             }
+        }
+
+        if self.matches(&[TokenType::Return]) {
+            self.take_next();
+            let keyword = self.m_previous.clone().unwrap();
+            let value = if !self.matches(&[TokenType::Semicolon]) {
+                Some(self.expression()?)
+            } else {
+                None
+            };
+
+            match self.take_next() {
+                Some(token) => {
+                    if token.get_token_type() == &TokenType::Semicolon {
+                    } else {
+                        self.m_errors.push(format!(
+                            "Expected ';' after return value\n    => line {} | column {}",
+                            token.get_line_number().saturating_sub(1),
+                            token.get_col_range().start + 1
+                        ));
+                        return Err(anyhow::anyhow!(""));
+                    }
+                }
+                None => {
+                    self.m_errors.push(format!(
+                        "Expected ';' after return value\n    => line {} | column {}",
+                        self.m_previous
+                            .as_ref()
+                            .unwrap()
+                            .get_line_number()
+                            .saturating_sub(1),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    return Err(anyhow::anyhow!(""));
+                }
+            }
+
+            return Ok(Stmt::new_return(keyword, value));
         }
 
         self.statement()

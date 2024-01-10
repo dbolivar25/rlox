@@ -4,6 +4,7 @@ use crate::visitor::ErrorValue;
 use crate::{ast::*, visitor::StmtEvaluator};
 
 use anyhow::Result;
+use itertools::Itertools;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
@@ -81,7 +82,7 @@ impl Debug for Callable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Callable::NativeFunction(_env, _arity, _call) => write!(f, "<native function>"),
-            Callable::Function(_env, _param, _arity, _stmt) => write!(f, "<function>{:?}", _stmt,),
+            Callable::Function(_env, _param, _arity, _stmt) => write!(f, "fun ({}) {:?}", _param.iter().join(", "), _stmt),
         }
     }
 }

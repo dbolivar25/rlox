@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::fmt::format;
 use std::fmt::Display;
 use std::rc::Rc;
 
@@ -340,7 +339,7 @@ impl ExprVisitor for ExprEvaluator {
 
                 let arguments = arguments
                     .into_iter()
-                    .zip(idents.into_iter())
+                    .zip(idents)
                     .map(|(value, _ident)| (None, value))
                     .collect();
 
@@ -385,6 +384,7 @@ impl Display for ErrorValue {
 
 pub struct StmtEvaluator {
     m_env: Rc<RefCell<Environment>>,
+    m_result: Vec<Value>,
     m_errors: Vec<ErrorValue>,
 }
 
@@ -392,6 +392,7 @@ impl StmtEvaluator {
     pub fn new(env: &Rc<RefCell<Environment>>) -> Self {
         Self {
             m_env: env.clone(),
+            m_result: Vec::new(),
             m_errors: Vec::new(),
         }
     }
@@ -493,9 +494,10 @@ impl StmtVisitor for StmtEvaluator {
             Box::new(Stmt::new_block(body.to_vec())),
         ));
 
+        // println!("{:?}", callable);
         self.m_env
             .borrow_mut()
-            .define(format!("{}", name), callable);
+            .define(format!("{}", name), callable.clone());
     }
 
     fn visit_return(&mut self, _keyword: &Token, value: &Option<Expr>) {
@@ -503,6 +505,7 @@ impl StmtVisitor for StmtEvaluator {
         if let Some(value) = value {
             value.accept(&mut visitor);
         }
+
         match visitor.get_result() {
             Ok(result) => {
                 self.m_errors.push(ErrorValue::Return(result));

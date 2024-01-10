@@ -1,6 +1,6 @@
 use std::{
     fmt::{Debug, Display},
-    ops::Range,
+    ops::{Deref, DerefMut, Range},
 };
 
 #[derive(Debug, PartialEq, Clone)]
@@ -99,7 +99,10 @@ impl Display for TokenType {
                 TokenType::True => "true".to_string(),
                 TokenType::Var => "let".to_string(),
                 TokenType::While => "while".to_string(),
-                token => format!("{:?}", token),
+                TokenType::Identifier(identifier) => identifier.to_string(),
+                TokenType::String(string) => string.to_string(),
+                TokenType::Number(number) => number.to_string(),
+                TokenType::Error(error) => error.to_string(),
             }
         )
     }
@@ -188,5 +191,19 @@ impl Display for Token {
             TokenType::Identifier(identifier) => write!(f, "{}", identifier),
             token => write!(f, "{}", token),
         }
+    }
+}
+
+impl Deref for Token {
+    type Target = TokenType;
+
+    fn deref(&self) -> &Self::Target {
+        &self.m_token
+    }
+}
+
+impl DerefMut for Token {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.m_token
     }
 }

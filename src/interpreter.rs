@@ -1,8 +1,8 @@
-use crate::ast::*;
+
 use crate::environment::*;
 use crate::lexer::*;
 use crate::parser::*;
-use crate::token::*;
+
 use crate::value::*;
 use crate::visitor::*;
 
@@ -103,10 +103,9 @@ impl Interpreter {
             "dbg".into(),
             Value::Callable(Callable::NativeFunction(
                 None,
-                1,
+                2,
                 Box::new(|args| {
-                    dbg!(&args);
-                    println!("value = {:#?}", args[0]);
+                    println!("{} => {:?}\n", args[0], args[1]);
                     Value::Nil
                 }),
             )),
@@ -121,41 +120,6 @@ impl Interpreter {
                     println!("testing123 from native print function");
                     Value::Nil
                 }),
-            )),
-        );
-
-        global_env.borrow_mut().define(
-            "test2".into(),
-            Value::Callable(Callable::Function(
-                Some(global_env.clone()),
-                vec![],
-                0,
-                Box::new(Stmt::new_block(vec![
-                    Stmt::new_expression(Expr::new_call(
-                        Box::new(Expr::new_variable(Token::new_token(
-                            TokenType::Identifier("println".into()),
-                            0,
-                            0,
-                            0,
-                        ))),
-                        Token::new_token(TokenType::LeftParen, 0, 0, 0),
-                        vec![Expr::new_literal(Token::new_token(
-                            TokenType::String("testing123 from rlox print function".into()),
-                            0,
-                            0,
-                            0,
-                        ))],
-                    )),
-                    Stmt::new_return(
-                        Token::new_token(TokenType::Nil, 0, 0, 0),
-                        Some(Expr::new_literal(Token::new_token(
-                            TokenType::String("HELLO RETURN".into()),
-                            0,
-                            0,
-                            0,
-                        ))),
-                    ),
-                ])),
             )),
         );
 
