@@ -1,38 +1,53 @@
 use crate::environment::Environment;
+use crate::token::Token;
+use crate::{ast::*, visitor::StmtEvaluator};
+
 use std::fmt::{Debug, Display};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 #[derive(Clone)]
-pub struct Callable {
-    m_env: Option<Environment>,
-    m_arity: usize,
-    m_call: Box<fn(Vec<Value>) -> Value>,
+pub enum Callable {
+    NativeFunction(Option<Rc<RefCell<Environment>>>, usize, Box<fn(Vec<Value>) -> Value>),
+    Function(Option<Rc<RefCell<Environment>>>, Vec<Token>, usize, Box<Stmt>),
 }
 
 impl Callable {
-    pub fn new(
-        env: Option<Environment>,
-        arity: usize,
-        call: Box<fn(Vec<Value>) -> Value>,
-    ) -> Callable {
-        Callable {
-            m_env: env,
-            m_arity: arity,
-            m_call: call,
+    pub fn call(&self, arguments: Vec<Value>) -> Value {
+        match self {
+            Callable::NativeFunction(_env, _arity, call) => call(arguments),
+            Callable::Function(env, params, _arity, stmt) => {
+                let inner_scope = Environment::new_scope(env.as_ref().unwrap());
+
+                for (param, argument) in params.iter().zip(arguments.iter()) {
+                    inner_scope
+                        .borrow_mut()
+                        .define(format!("{}", param), argument.clone())
+                }
+                dbg!(&inner_scope);
+
+                let mut visitor = StmtEvaluator::new(&inner_scope);
+                stmt.accept(&mut visitor);
+                // dbg!(&visitor.get_result());
+                Value::Nil
+            }
         }
     }
 
-    pub fn call(&self, arguments: Vec<Value>) -> Value {
-        (self.m_call)(arguments)
-    }
-
     pub fn arity(&self) -> usize {
-        self.m_arity
+        match self {
+            Callable::NativeFunction(_env, arity, _call) => *arity,
+            Callable::Function(_ident, _env, arity, _stmt) => *arity,
+        }
     }
 }
 
 impl Debug for Callable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<callable>")
+        match self {
+            Callable::NativeFunction(_env, _arity, _call) => write!(f, "<native function>"),
+            Callable::Function(_env, param, _arity, _stmt) => write!(f, "<function>{:?}", _stmt,),
+        }
     }
 }
 
@@ -133,7 +148,7 @@ impl std::fmt::Debug for Value {
             Value::Number(number) => write!(f, "{}", number),
             Value::String(string) => write!(f, "\"{}\"", string),
             Value::Boolean(boolean) => write!(f, "{}", boolean),
-            Value::Callable(_callable) => write!(f, "<function>",),
+            Value::Callable(callable) => write!(f, "{:?}", callable),
             Value::Nil => write!(f, "nil"),
         }
     }

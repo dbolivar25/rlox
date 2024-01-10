@@ -1,3 +1,7 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
 use crate::ast::*;
 use crate::environment::Environment;
 use crate::token::*;
@@ -101,16 +105,16 @@ impl ExprVisitor for ExprPrinter {
     }
 }
 
-pub struct ExprEvaluator<'a> {
-    m_env: &'a mut Environment,
+pub struct ExprEvaluator {
+    m_env: Rc<RefCell<Environment>>,
     m_result: Vec<Value>,
     m_errors: Vec<String>,
 }
 
-impl<'a> ExprEvaluator<'a> {
-    pub fn new(env: &'a mut Environment) -> Self {
+impl ExprEvaluator {
+    pub fn new(env: &Rc<RefCell<Environment>>) -> Self {
         Self {
-            m_env: env,
+            m_env: env.clone(),
             m_result: Vec::new(),
             m_errors: Vec::new(),
         }
@@ -128,7 +132,7 @@ impl<'a> ExprEvaluator<'a> {
     }
 }
 
-impl ExprVisitor for ExprEvaluator<'_> {
+impl ExprVisitor for ExprEvaluator {
     fn visit_binary(&mut self, left: &Expr, token: &Token, right: &Expr) {
         left.accept(self);
         right.accept(self);
@@ -257,7 +261,7 @@ impl ExprVisitor for ExprEvaluator<'_> {
                 "true" => Value::Boolean(true),
                 "false" => Value::Boolean(false),
                 "nil" => Value::Nil,
-                identifier => match self.m_env.get(identifier) {
+                identifier => match self.m_env.borrow().get(identifier) {
                     Some(value) => value.clone(),
                     None => {
                         self.m_errors
@@ -284,11 +288,12 @@ impl ExprVisitor for ExprEvaluator<'_> {
         match self.m_result.pop() {
             Some(value) => match token.get_token_type() {
                 TokenType::Identifier(identifier) => {
-                    if let Some(old_val) = self.m_env.get_mut(identifier) {
-                        *old_val = value.clone();
-                    } else {
-                        self.m_errors
-                            .push(format!("Undefined variable => {:?}", token));
+                    if let Err(err) = self
+                        .m_env
+                        .borrow_mut()
+                        .assign(identifier.to_string(), value.clone())
+                    {
+                        self.m_errors.push(format!("{}", err));
                     }
 
                     self.m_result.push(value);
@@ -369,7 +374,7 @@ impl ExprVisitor for ExprEvaluator<'_> {
         }
     }
 
-    fn visit_call(&mut self, callee: &Expr, paren: &Token, arguments: &[Expr]) {
+    fn visit_call(&mut self, callee: &Expr, _paren: &Token, arguments: &[Expr]) {
         callee.accept(self);
 
         if !self.m_errors.is_empty() {
@@ -379,10 +384,8 @@ impl ExprVisitor for ExprEvaluator<'_> {
         let callee = match self.m_result.pop() {
             Some(callee) => callee,
             None => {
-                self.m_errors.push(format!(
-                    "Invalid call expression => {:?}",
-                    callee
-                ));
+                self.m_errors
+                    .push(format!("Invalid call expression => {:?}", callee));
                 return;
             }
         };
@@ -396,10 +399,12 @@ impl ExprVisitor for ExprEvaluator<'_> {
             }
         }
 
-        let arguments = self.m_result.split_off(self.m_result.len() - arguments.len());
+        let arguments = self
+            .m_result
+            .split_off(self.m_result.len() - arguments.len());
 
         match callee {
-            Value::Callable(callable) => {
+            Value::Callable(mut callable) => {
                 if callable.arity() != arguments.len() {
                     self.m_errors.push(format!(
                         "Invalid call expression => {:?}{:?}",
@@ -408,13 +413,13 @@ impl ExprVisitor for ExprEvaluator<'_> {
                     return;
                 }
 
+                // dbg!(&self.m_env);
+
                 self.m_result.push(callable.call(arguments));
             }
             callee => {
-                self.m_errors.push(format!(
-                    "Invalid call expression => {:?}",
-                    callee
-                ));
+                self.m_errors
+                    .push(format!("Invalid call expression => {:?}", callee));
             }
         }
     }
@@ -427,7 +432,7 @@ pub trait StmtVisitor {
     fn visit_var(&mut self, name: &Token, initializer: &Option<Expr>);
     fn visit_while(&mut self, condition: &Expr, body: &Stmt);
     fn visit_if(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Box<Stmt>>);
-    // fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]);
+    fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]);
     // fn visit_return(&mut self, keyword: &Token, value: &Option<Expr>);
     // fn visit_class(&mut self, name: &Token, methods: &[Stmt]);
 }
@@ -528,65 +533,189 @@ impl StmtVisitor for StmtPrinter {
         self.m_content.push(")".into());
     }
 
-    // fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
-    //     self.m_content.push("(".into());
-    //     self.m_content.push("Function".into());
-    //     self.m_content.push(format!("{:?}", name));
-    //     for param in params.iter() {
-    //         self.m_content.push(format!("{:?}", param));
-    //     }
-    //     for stmt in body.iter() {
-    //         let mut visitor = StmtPrinter::new();
-    //         stmt.accept(&mut visitor);
-    //         match visitor.get_result() {
-    //             Ok(result) => self.m_content.push(result),
-    //             Err(err) => self.m_errors.push(err.join("\n")),
-    //         }
-    //     }
-    //     self.m_content.push(")".into());
-    // }
+    fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
+        self.m_content.push("(".into());
+        self.m_content.push("Function".into());
+        self.m_content.push(format!("{:?}", name));
+        for param in params.iter() {
+            self.m_content.push(format!("{:?}", param));
+        }
+        for stmt in body.iter() {
+            let mut visitor = StmtPrinter::new();
+            stmt.accept(&mut visitor);
+            match visitor.get_result() {
+                Ok(result) => self.m_content.push(result),
+                Err(err) => self.m_errors.push(err.join("\n")),
+            }
+        }
+        self.m_content.push(")".into());
+    }
 }
 
 pub struct StmtEvaluator {
-    m_env: Option<Environment>,
+    m_env: Rc<RefCell<Environment>>,
     m_errors: Vec<String>,
 }
 
 impl StmtEvaluator {
-    pub fn new(env: Option<Environment>) -> Self {
+    pub fn new(env: &Rc<RefCell<Environment>>) -> Self {
         Self {
-            m_env: env,
+            m_env: env.clone(),
             m_errors: Vec::new(),
         }
     }
 
-    pub fn get_result(&mut self) -> Result<Option<Environment>, (Vec<String>, Option<Environment>)> {
+    pub fn get_result(&mut self) -> Result<(), Vec<String>> {
         if self.m_errors.is_empty() {
-            Ok(self.m_env.take())
+            Ok(())
         } else {
-            Err((self.m_errors.clone(), self.m_env.take()))
+            Err(self.m_errors.clone())
+        }
+    }
+
+    fn remap_stmt(stmt: &mut Stmt, mapped_params: &[(Token, Token)]) -> Stmt {
+        match stmt {
+            Stmt::Block { m_statements } => Stmt::new_block(
+                m_statements
+                    .iter_mut()
+                    .map(|stmt| Self::remap_stmt(stmt, mapped_params))
+                    .collect::<Vec<Stmt>>(),
+            ),
+            Stmt::Expression { m_expression } => {
+                Stmt::new_expression(Self::remap_idents(m_expression, mapped_params))
+            }
+            Stmt::Print { m_expression } => {
+                Stmt::new_print(Self::remap_idents(m_expression, mapped_params))
+            }
+            Stmt::Var {
+                m_name,
+                m_initializer,
+            } => match m_initializer {
+                Some(initializer) => Stmt::new_var(
+                    m_name.clone(),
+                    Some(Self::remap_idents(initializer, mapped_params)),
+                ),
+                None => stmt.clone(),
+            },
+            Stmt::While {
+                m_condition,
+                m_body,
+            } => Stmt::new_while(
+                Self::remap_idents(m_condition, mapped_params),
+                Box::new(Self::remap_stmt(m_body.as_mut(), mapped_params)),
+            ),
+            Stmt::If {
+                m_condition,
+                m_then_branch,
+                m_else_branch,
+            } => Stmt::new_if(
+                Self::remap_idents(m_condition, mapped_params),
+                Box::new(Self::remap_stmt(m_then_branch.as_mut(), mapped_params)),
+                match m_else_branch {
+                    Some(else_branch) => Some(Box::new(Self::remap_stmt(
+                        else_branch.as_mut(),
+                        mapped_params,
+                    ))),
+                    None => None,
+                },
+            ),
+            Stmt::Function {
+                m_name,
+                m_params,
+                m_body,
+            } => Stmt::new_function(
+                m_name.clone(),
+                m_params.clone(),
+                m_body
+                    .iter_mut()
+                    .map(|stmt| Self::remap_stmt(stmt, mapped_params))
+                    .collect::<Vec<Stmt>>(),
+            ),
+        }
+    }
+
+    fn remap_idents(expr: &mut Expr, mapped_params: &[(Token, Token)]) -> Expr {
+        match expr {
+            Expr::Binary {
+                m_left,
+                m_token,
+                m_right,
+            } => Expr::new_binary(
+                Box::new(Self::remap_idents(m_left, mapped_params)),
+                m_token.clone(),
+                Box::new(Self::remap_idents(m_right, mapped_params)),
+            ),
+            Expr::Grouping { m_expression } => {
+                Expr::new_grouping(Box::new(Self::remap_idents(m_expression, mapped_params)))
+            }
+            Expr::Literal { m_token: _ } => expr.clone(),
+            Expr::Unary {
+                m_token,
+                m_expression,
+            } => Expr::new_unary(
+                m_token.clone(),
+                Box::new(Self::remap_idents(m_expression, mapped_params)),
+            ),
+            Expr::Variable { m_token } => {
+                if let TokenType::Identifier(name) = m_token.get_token_type() {
+                    if let Some(mapped_param) = mapped_params.iter().find(|(param, _)| {
+                        if let TokenType::Identifier(param) = param.get_token_type() {
+                            param == name
+                        } else {
+                            false
+                        }
+                    }) {
+                        Expr::new_variable(mapped_param.1.clone())
+                    } else {
+                        expr.clone()
+                    }
+                } else {
+                    expr.clone()
+                }
+            }
+            Expr::Assign { m_token, m_value } => Expr::new_assign(
+                m_token.clone(),
+                Box::new(Self::remap_idents(m_value, mapped_params)),
+            ),
+            Expr::Logical {
+                m_left,
+                m_token,
+                m_right,
+            } => Expr::new_logical(
+                Box::new(Self::remap_idents(m_left, mapped_params)),
+                m_token.clone(),
+                Box::new(Self::remap_idents(m_right, mapped_params)),
+            ),
+            Expr::Call {
+                m_callee,
+                m_paren,
+                m_arguments,
+            } => Expr::new_call(
+                Box::new(Self::remap_idents(m_callee, mapped_params)),
+                m_paren.clone(),
+                m_arguments
+                    .iter_mut()
+                    .map(|argument| Self::remap_idents(argument, mapped_params))
+                    .collect::<Vec<Expr>>(),
+            ),
         }
     }
 }
 
 impl StmtVisitor for StmtEvaluator {
     fn visit_block(&mut self, statements: &[Stmt]) {
-        self.m_env.as_mut().unwrap().new_scope();
+        let block_scope = Environment::new_scope(&self.m_env);
         for stmt in statements.iter() {
-            let mut visitor = StmtEvaluator::new(self.m_env.clone());
+            let mut visitor = StmtEvaluator::new(&block_scope);
             stmt.accept(&mut visitor);
-            match visitor.get_result() {
-                Ok(result_env) => {
-                    self.m_env = result_env;
-                }
-                Err(err) => self.m_errors.push(err.0.join("\n")),
+            if let Err(err) = visitor.get_result() {
+                self.m_errors.push(err.join("\n"));
             }
         }
-        self.m_env.as_mut().unwrap().drop_scope();
     }
 
     fn visit_expression(&mut self, expression: &Expr) {
-        let mut visitor = ExprEvaluator::new(self.m_env.as_mut().unwrap());
+        let mut visitor = ExprEvaluator::new(&self.m_env);
         expression.accept(&mut visitor);
         match visitor.get_result() {
             Ok(_) => {}
@@ -595,7 +724,7 @@ impl StmtVisitor for StmtEvaluator {
     }
 
     fn visit_print(&mut self, expression: &Expr) {
-        let mut visitor = ExprEvaluator::new(self.m_env.as_mut().unwrap());
+        let mut visitor = ExprEvaluator::new(&self.m_env);
         expression.accept(&mut visitor);
         match visitor.get_result() {
             Ok(result) => {
@@ -606,14 +735,14 @@ impl StmtVisitor for StmtEvaluator {
     }
 
     fn visit_var(&mut self, name: &Token, initializer: &Option<Expr>) {
-        let mut visitor = ExprEvaluator::new(self.m_env.as_mut().unwrap());
+        let mut visitor = ExprEvaluator::new(&self.m_env);
         if let Some(initializer) = initializer {
             initializer.accept(&mut visitor);
         }
         match visitor.get_result() {
             Ok(result) => {
                 if let TokenType::Identifier(name) = name.get_token_type() {
-                    self.m_env.as_mut().unwrap().define(name, result);
+                    self.m_env.borrow_mut().define(name.to_string(), result);
                 }
             }
             Err(err) => self.m_errors.push(err.join("\n")),
@@ -621,32 +750,23 @@ impl StmtVisitor for StmtEvaluator {
     }
 
     fn visit_if(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Box<Stmt>>) {
-        let mut visitor = ExprEvaluator::new(self.m_env.as_mut().unwrap());
+        let mut visitor = ExprEvaluator::new(&self.m_env);
         condition.accept(&mut visitor);
         match visitor.get_result() {
             Ok(result) => {
+                let inner_scope = Environment::new_scope(&self.m_env);
                 if result.is_truthy() {
-                    self.m_env.as_mut().unwrap().new_scope();
-                    let mut visitor = StmtEvaluator::new(self.m_env.take());
+                    let mut visitor = StmtEvaluator::new(&inner_scope);
                     then_branch.accept(&mut visitor);
-                    match visitor.get_result() {
-                        Ok(result_env) => {
-                            self.m_env = result_env;
-                        }
-                        Err(err) => self.m_errors.push(err.0.join("\n")),
+                    if let Err(err) = visitor.get_result() {
+                        self.m_errors.push(err.join("\n"));
                     }
-                    self.m_env.as_mut().unwrap().drop_scope();
                 } else if let Some(else_branch) = else_branch {
-                    self.m_env.as_mut().unwrap().new_scope();
-                    let mut visitor = StmtEvaluator::new(self.m_env.take());
+                    let mut visitor = StmtEvaluator::new(&inner_scope);
                     else_branch.accept(&mut visitor);
-                    match visitor.get_result() {
-                        Ok(result_env) => {
-                            self.m_env = result_env;
-                        }
-                        Err(err) => self.m_errors.push(err.0.join("\n")),
+                    if let Err(err) = visitor.get_result() {
+                        self.m_errors.push(err.join("\n"));
                     }
-                    self.m_env.as_mut().unwrap().drop_scope();
                 }
             }
             Err(err) => self.m_errors.push(err.join("\n")),
@@ -655,7 +775,7 @@ impl StmtVisitor for StmtEvaluator {
 
     fn visit_while(&mut self, condition: &Expr, body: &Stmt) {
         while {
-            let mut visitor = ExprEvaluator::new(self.m_env.as_mut().unwrap());
+            let mut visitor = ExprEvaluator::new(&self.m_env);
             condition.accept(&mut visitor);
             match visitor.get_result() {
                 Ok(result) => result.is_truthy(),
@@ -665,47 +785,51 @@ impl StmtVisitor for StmtEvaluator {
                 }
             }
         } {
-            self.m_env.as_mut().unwrap().new_scope();
-            let mut visitor = StmtEvaluator::new(self.m_env.take());
+            let inner_scope = Environment::new_scope(&self.m_env);
+            let mut visitor = StmtEvaluator::new(&inner_scope);
             body.accept(&mut visitor);
-            match visitor.get_result() {
-                Ok(result_env) => {
-                    self.m_env = result_env;
-                }
-                Err(err) => self.m_errors.push(err.0.join("\n")),
+            if let Err(err) = visitor.get_result() {
+                self.m_errors.push(err.join("\n"));
             }
-            self.m_env.as_mut().unwrap().drop_scope();
         }
     }
-    
-    // fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
-    //     let mut visitor = ExprEvaluator::new(self.m_env.as_mut().unwrap());
-    //     let mut callable = Callable::new(self.m_env.as_mut().unwrap().clone(), params.len(), Box::new(|_| Value::Nil));
-    //     callable.m_call = Box::new(|arguments| {
-    //         let mut env = Environment::new();
-    //         for (param, argument) in params.iter().zip(arguments.iter()) {
-    //             env.define(param.get_token_type().to_string().as_str(), argument.clone());
-    //         }
-    //         let mut visitor = StmtEvaluator::new(Some(env));
-    //         for stmt in body.iter() {
-    //             stmt.accept(&mut visitor);
-    //         }
-    //         match visitor.get_result() {
-    //             Ok(result_env) => {
-    //                 if let Some(result_env) = result_env {
-    //                     if let Some(result) = result_env.get("return") {
-    //                         return result.clone();
-    //                     }
-    //                 }
-    //                 Value::Nil
-    //             }
-    //             Err(err) => {
-    //                 println!("Runtime produced {} {}:", err.len(), if err.len() == 1 { "error" } else { "errors" });
-    //                 err.iter().for_each(|err| println!("    ERROR: {}", &err));
-    //                 Value::Nil
-    //             }
-    //         }
-    //     });
-    //     self.m_env.as_mut().unwrap().define(name.get_token_type().to_string().as_str(), Value::Callable(callable));
-    // }
+
+    fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
+        // let mut env = self.m_env.take().unwrap().new_scope();
+        // params.iter().enumerate().for_each(|(_, param)| {
+        // env.define(format!("{}", param).as_str(), Value::Nil);
+        // });
+
+        // let mapped_params = params
+        //     .into_iter()
+        //     .enumerate()
+        //     .filter_map(|(i, param)| {
+        //         if let TokenType::Identifier(_name) = param.get_token_type() {
+        //             Some((
+        //                 param.clone(),
+        //                 Token::new_token(TokenType::Identifier(format!("arg{}", i)), 0, 0, 0),
+        //             ))
+        //         } else {
+        //             None
+        //         }
+        //     })
+        //     .collect::<Vec<(Token, Token)>>();
+        //
+        // let body = body
+        //     .to_vec()
+        //     .into_iter()
+        //     .map(|mut stmt| Self::remap_stmt(&mut stmt, &mapped_params))
+        //     .collect::<Vec<Stmt>>();
+
+        let callable = Value::Callable(Callable::Function(
+            Some(self.m_env.clone()),
+            params.to_vec(),
+            params.len(),
+            Box::new(Stmt::new_block(body.to_vec())),
+        ));
+
+        self.m_env
+            .borrow_mut()
+            .define(format!("{}", name), callable);
+    }
 }

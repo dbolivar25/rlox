@@ -575,6 +575,76 @@ impl Parser {
             return Ok(Stmt::new_var(name, initializer));
         }
 
+        if self.matches(&[TokenType::Fun]) {
+            self.take_next();
+            let name = self.take_next().unwrap();
+
+            if !matches!(name.get_token_type(), TokenType::Identifier(_)) {
+                self.m_errors.push(format!(
+                    "Expected identifier after 'fun'\n    => line {} | column {}",
+                    name.get_line_number().saturating_sub(1),
+                    name.get_col_range().start + 1
+                ));
+                return Err(anyhow::anyhow!(""));
+            }
+
+            if self.matches(&[TokenType::LeftParen]) {
+                self.take_next();
+                let mut parameters = Vec::new();
+                if !self.matches(&[TokenType::RightParen]) {
+                    loop {
+                        if parameters.len() >= 255 {
+                            self.m_errors.push(format!(
+                                "Cannot have more than 255 parameters\n    => line {} | column {}",
+                                self.m_previous.as_ref().unwrap().get_line_number(),
+                                self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                            ));
+                            return Err(anyhow::anyhow!(""));
+                        }
+
+                        parameters.push(self.take_next().unwrap());
+
+                        if !self.matches(&[TokenType::Comma]) {
+                            break;
+                        }
+
+                        self.take_next();
+                    }
+                }
+
+                if self.matches(&[TokenType::RightParen]) {
+                    self.take_next();
+                } else {
+                    self.m_errors.push(format!(
+                        "Expected ')' after function parameters\n    => line {} | column {}",
+                        self.m_previous.as_ref().unwrap().get_line_number(),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    return Err(anyhow::anyhow!(""));
+                }
+
+                if self.matches(&[TokenType::LeftBrace]) {
+                    let body = self.statement()?;
+                    let body = vec![body];
+                    return Ok(Stmt::new_function(name, parameters, body));
+                } else {
+                    self.m_errors.push(format!(
+                        "Expected '{{' after function declaration\n    => line {} | column {}",
+                        self.m_previous.as_ref().unwrap().get_line_number(),
+                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                    ));
+                    return Err(anyhow::anyhow!(""));
+                }
+            } else {
+                self.m_errors.push(format!(
+                    "Expected '(' after function name\n    => line {} | column {}",
+                    name.get_line_number().saturating_sub(1),
+                    name.get_col_range().start
+                ));
+                return Err(anyhow::anyhow!(""));
+            }
+        }
+
         self.statement()
     }
 
