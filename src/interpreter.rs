@@ -16,7 +16,7 @@ pub struct Interpreter {
 
 impl Interpreter {
     pub fn new() -> Interpreter {
-        let mut global_env = Environment::new();
+        let global_env = Environment::new();
 
         global_env.borrow_mut().define(
             "clock".into(),
@@ -105,64 +105,58 @@ impl Interpreter {
                 None,
                 1,
                 Box::new(|args| {
-                    println!("{:#?}", args[0]);
+                    println!("{}{:#?}", stringify!(args[0]), args[0]);
                     Value::Nil
                 }),
             )),
         );
 
-        // global_env.define(
-        //     "test0",
-        //     Value::Callable(Callable::NativeFunction(
-        //         None,
-        //         0,
-        //         Box::new(|_| {
-        //             println!("testing123 from native print function");
-        //             Value::Nil
-        //         }),
-        //     )),
-        // );
-        //
-        // global_env.define(
-        //     "test1",
-        //     Value::Callable(Callable::Function(
-        //         Some(global_env.clone()),
-        //         vec![],
-        //         0,
-        //         Box::new(Stmt::new_block(vec![Stmt::new_print(Expr::new_literal(
-        //             Token::new_token(
-        //                 TokenType::String("testing123 from rlox print statement".into()),
-        //                 0,
-        //                 0,
-        //                 0,
-        //             ),
-        //         ))])),
-        //     )),
-        // );
-        //
-        // global_env.define(
-        //     "test2",
-        //     Value::Callable(Callable::Function(
-        //         Some(global_env.clone()),
-        //         vec![],
-        //         0,
-        //         Box::new(Stmt::new_block(vec![Stmt::new_expression(Expr::new_call(
-        //             Box::new(Expr::new_variable(Token::new_token(
-        //                 TokenType::Identifier("print".into()),
-        //                 0,
-        //                 0,
-        //                 0,
-        //             ))),
-        //             Token::new_token(TokenType::LeftParen, 0, 0, 0),
-        //             vec![Expr::new_literal(Token::new_token(
-        //                 TokenType::String("testing123 from rlox print function".into()),
-        //                 0,
-        //                 0,
-        //                 0,
-        //             ))],
-        //         ))])),
-        //     )),
-        // );
+        global_env.borrow_mut().define(
+            "test0".into(),
+            Value::Callable(Callable::NativeFunction(
+                None,
+                0,
+                Box::new(|_| {
+                    println!("testing123 from native print function");
+                    Value::Nil
+                }),
+            )),
+        );
+
+        global_env.borrow_mut().define(
+            "test2".into(),
+            Value::Callable(Callable::Function(
+                Some(global_env.clone()),
+                vec![],
+                0,
+                Box::new(Stmt::new_block(vec![
+                    Stmt::new_expression(Expr::new_call(
+                        Box::new(Expr::new_variable(Token::new_token(
+                            TokenType::Identifier("println".into()),
+                            0,
+                            0,
+                            0,
+                        ))),
+                        Token::new_token(TokenType::LeftParen, 0, 0, 0),
+                        vec![Expr::new_literal(Token::new_token(
+                            TokenType::String("testing123 from rlox print function".into()),
+                            0,
+                            0,
+                            0,
+                        ))],
+                    )),
+                    Stmt::new_return(
+                        Token::new_token(TokenType::Nil, 0, 0, 0),
+                        Some(Expr::new_literal(Token::new_token(
+                            TokenType::String("HELLO RETURN".into()),
+                            0,
+                            0,
+                            0,
+                        ))),
+                    ),
+                ])),
+            )),
+        );
 
         Interpreter {
             m_environment: global_env,
@@ -178,8 +172,7 @@ impl Interpreter {
                         stmt.accept(&mut visitor);
 
                         match visitor.get_result() {
-                            Ok(_) => {
-                            }
+                            Ok(_) => {}
                             Err(err) => {
                                 println!(
                                     "Runtime produced {} {}:",

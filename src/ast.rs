@@ -55,11 +55,10 @@ define_ast!(
     StmtVisitor,
     block: Block(m_statements: Vec<Stmt>),
     expression: Expression(m_expression: Expr),
-    print: Print(m_expression: Expr),
     var: Var(m_name: Token, m_initializer: Option<Expr>),
     r#while: While(m_condition: Expr, m_body: Box<Stmt>),
     r#if: If(m_condition: Expr, m_then_branch: Box<Stmt>, m_else_branch: Option<Box<Stmt>>),
     function: Function(m_name: Token, m_params: Vec<Token>, m_body: Vec<Stmt>),
-    // r#return: Return(m_keyword: Token, m_value: Option<Expr>),
+    r#return: Return(m_keyword: Token, m_value: Option<Expr>),
     // class: Class(m_name: Token, m_methods: Vec<Stmt>),
 );

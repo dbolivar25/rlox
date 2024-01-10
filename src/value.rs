@@ -1,21 +1,32 @@
 use crate::environment::Environment;
 use crate::token::Token;
+use crate::visitor::ErrorValue;
 use crate::{ast::*, visitor::StmtEvaluator};
 
+use anyhow::Result;
+use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
-use std::cell::RefCell;
 
 #[derive(Clone)]
 pub enum Callable {
-    NativeFunction(Option<Rc<RefCell<Environment>>>, usize, Box<fn(Vec<Value>) -> Value>),
-    Function(Option<Rc<RefCell<Environment>>>, Vec<Token>, usize, Box<Stmt>),
+    NativeFunction(
+        Option<Rc<RefCell<Environment>>>,
+        usize,
+        Box<fn(Vec<Value>) -> Value>,
+    ),
+    Function(
+        Option<Rc<RefCell<Environment>>>,
+        Vec<Token>,
+        usize,
+        Box<Stmt>,
+    ),
 }
 
 impl Callable {
-    pub fn call(&self, arguments: Vec<Value>) -> Value {
+    pub fn call(&self, arguments: Vec<Value>) -> Result<Value, Vec<String>> {
         match self {
-            Callable::NativeFunction(_env, _arity, call) => call(arguments),
+            Callable::NativeFunction(_env, _arity, call) => Ok(call(arguments)),
             Callable::Function(env, params, _arity, stmt) => {
                 let inner_scope = Environment::new_scope(env.as_ref().unwrap());
 
@@ -24,12 +35,24 @@ impl Callable {
                         .borrow_mut()
                         .define(format!("{}", param), argument.clone())
                 }
-                dbg!(&inner_scope);
+                // dbg!(&inner_scope);
 
                 let mut visitor = StmtEvaluator::new(&inner_scope);
                 stmt.accept(&mut visitor);
-                // dbg!(&visitor.get_result());
-                Value::Nil
+
+                match visitor.get_result() {
+                    Ok(()) => Ok(Value::Nil),
+                    Err(value) => match value.last() {
+                        Some(ErrorValue::Return(value)) => Ok(value.clone()),
+                        _ => Err(value
+                            .into_iter()
+                            .map(|e| match e {
+                                ErrorValue::Return(_) => unreachable!(),
+                                ErrorValue::Error(message) => message,
+                            })
+                            .collect()),
+                    },
+                }
             }
         }
     }
@@ -77,6 +100,9 @@ impl Value {
             }
             (Value::String(string), Value::String(other_string)) => string == other_string,
             (Value::Boolean(boolean), Value::Boolean(other_boolean)) => boolean == other_boolean,
+            (Value::Callable(_callable), Value::Callable(_other_callable)) => false,
+            (Value::Nil, _) => false,
+            (_, Value::Nil) => false,
             _ => false,
         }
     }

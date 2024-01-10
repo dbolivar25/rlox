@@ -300,36 +300,36 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt> {
-        if self.matches(&[TokenType::Print]) {
-            self.take_next();
-            let expr = self.expression()?;
-            match self.take_next() {
-                Some(token) => {
-                    if token.get_token_type() == &TokenType::Semicolon {
-                    } else {
-                        self.m_errors.push(format!(
-                            "Expected ';' after expression\n    => line {} | column {}",
-                            token.get_line_number().saturating_sub(1),
-                            token.get_col_range().start + 1
-                        ));
-                        self.sync();
-                    }
-                }
-                None => {
-                    self.m_errors.push(format!(
-                        "Expected ';' after expression\n    => line {} | column {}",
-                        self.m_previous
-                            .as_ref()
-                            .unwrap()
-                            .get_line_number()
-                            .saturating_sub(1),
-                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
-                    ));
-                    self.sync();
-                }
-            }
-            return Ok(Stmt::new_print(expr));
-        }
+        // if self.matches(&[TokenType::Print]) {
+        //     self.take_next();
+        //     let expr = self.expression()?;
+        //     match self.take_next() {
+        //         Some(token) => {
+        //             if token.get_token_type() == &TokenType::Semicolon {
+        //             } else {
+        //                 self.m_errors.push(format!(
+        //                     "Expected ';' after expression\n    => line {} | column {}",
+        //                     token.get_line_number().saturating_sub(1),
+        //                     token.get_col_range().start + 1
+        //                 ));
+        //                 self.sync();
+        //             }
+        //         }
+        //         None => {
+        //             self.m_errors.push(format!(
+        //                 "Expected ';' after expression\n    => line {} | column {}",
+        //                 self.m_previous
+        //                     .as_ref()
+        //                     .unwrap()
+        //                     .get_line_number()
+        //                     .saturating_sub(1),
+        //                 self.m_previous.as_ref().unwrap().get_col_range().start + 1
+        //             ));
+        //             self.sync();
+        //         }
+        //     }
+        //     return Ok(Stmt::new_print(expr));
+        // }
 
         if self.matches(&[TokenType::LeftBrace]) {
             self.take_next();

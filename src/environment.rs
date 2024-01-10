@@ -1,10 +1,9 @@
 use crate::value::Value;
 
-use std::collections::HashMap;
-use std::cell::RefCell;
-use std::rc::Rc;
 use anyhow::Result;
-
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Environment {
@@ -36,7 +35,7 @@ impl Environment {
             Some(v) => {
                 *v = value;
                 Ok(())
-            },
+            }
             None => match &self.m_parent {
                 Some(parent) => parent.borrow_mut().assign(name, value),
                 None => Err(anyhow::anyhow!("Undefined variable '{}'", name)),
@@ -45,11 +44,10 @@ impl Environment {
     }
 
     pub fn get(&self, name: &str) -> Option<Value> {
-        match self.m_scope.get(name) {
-            Some(value) => Some(value.clone()),
-            None => self.m_parent.as_ref().and_then(|parent| parent.borrow().get(name)),
-        }
+        self.m_scope.get(name).cloned().or_else(|| {
+            self.m_parent
+                .as_ref()
+                .and_then(|parent| parent.borrow().get(name))
+        })
     }
 }
-
-
