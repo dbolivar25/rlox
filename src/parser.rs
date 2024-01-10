@@ -142,18 +142,18 @@ impl Parser {
         match self.take_next() {
             Some(token) => {
                 if token.get_token_type() == &TokenType::RightParen {
-                    return Ok(Expr::new_call(
+                    Ok(Expr::new_call(
                         Box::new(callee),
                         token,
                         arguments.into_iter().collect(),
-                    ));
+                    ))
                 } else {
                     self.m_errors.push(format!(
                         "Expected ')' after arguments\n    => line {} | column {}",
                         token.get_line_number().saturating_sub(1),
                         token.get_col_range().start + 1
                     ));
-                    return Err(anyhow::anyhow!(""));
+                    Err(anyhow::anyhow!(""))
                 }
             }
             None => {
@@ -166,7 +166,7 @@ impl Parser {
                         .saturating_sub(1),
                     self.m_previous.as_ref().unwrap().get_col_range().start + 1
                 ));
-                return Err(anyhow::anyhow!(""));
+                Err(anyhow::anyhow!(""))
             }
         }
     }

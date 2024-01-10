@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fmt::format;
 use std::fmt::Display;
 use std::rc::Rc;
 
@@ -271,9 +272,7 @@ impl ExprVisitor for ExprEvaluator {
 
         match self.m_result.pop() {
             Some(Value::Boolean(right)) => {
-                if token.get_token_type() == &TokenType::Or {
-                    self.m_result.push(Value::Boolean(right));
-                } else if token.get_token_type() == &TokenType::And {
+                if matches!(token.get_token_type(), TokenType::Or | TokenType::And) {
                     self.m_result.push(Value::Boolean(right));
                 }
             }
@@ -309,12 +308,20 @@ impl ExprVisitor for ExprEvaluator {
         };
 
         let mut arguments = arguments.to_vec();
+        let mut idents = Vec::new();
         for argument in arguments.iter_mut() {
+            let ident = match argument {
+                Expr::Variable { m_token } => Some(format!("{}", m_token)),
+                _ => None,
+            };
+
             argument.accept(self);
 
             if !self.m_errors.is_empty() {
                 return;
             }
+
+            idents.push(ident);
         }
 
         let arguments = self
@@ -322,7 +329,7 @@ impl ExprVisitor for ExprEvaluator {
             .split_off(self.m_result.len() - arguments.len());
 
         match callee {
-            Value::Callable(mut callable) => {
+            Value::Callable(callable) => {
                 if callable.arity() != arguments.len() {
                     self.m_errors.push(format!(
                         "Invalid call expression => {:?}{:?}",
@@ -331,7 +338,11 @@ impl ExprVisitor for ExprEvaluator {
                     return;
                 }
 
-                // dbg!(&self.m_env);
+                let arguments = arguments
+                    .into_iter()
+                    .zip(idents.into_iter())
+                    .map(|(value, _ident)| (None, value))
+                    .collect();
 
                 match callable.call(arguments) {
                     Ok(result) => self.m_result.push(result),
@@ -410,8 +421,7 @@ impl StmtVisitor for StmtEvaluator {
         let mut visitor = ExprEvaluator::new(&self.m_env);
         expression.accept(&mut visitor);
         if let Err(err) = visitor.get_result() {
-            self.m_errors
-                .extend(err.into_iter().map(|err| ErrorValue::Error(err)));
+            self.m_errors.extend(err.into_iter().map(ErrorValue::Error));
         }
     }
 
@@ -426,9 +436,7 @@ impl StmtVisitor for StmtEvaluator {
                     self.m_env.borrow_mut().define(name.to_string(), result);
                 }
             }
-            Err(err) => self
-                .m_errors
-                .extend(err.into_iter().map(|err| ErrorValue::Error(err))),
+            Err(err) => self.m_errors.extend(err.into_iter().map(ErrorValue::Error)),
         }
     }
 
@@ -452,9 +460,7 @@ impl StmtVisitor for StmtEvaluator {
                     }
                 }
             }
-            Err(err) => self
-                .m_errors
-                .extend(err.into_iter().map(|err| ErrorValue::Error(err))),
+            Err(err) => self.m_errors.extend(err.into_iter().map(ErrorValue::Error)),
         }
     }
 
@@ -465,8 +471,7 @@ impl StmtVisitor for StmtEvaluator {
             match visitor.get_result() {
                 Ok(result) => result.is_truthy(),
                 Err(err) => {
-                    self.m_errors
-                        .extend(err.into_iter().map(|err| ErrorValue::Error(err)));
+                    self.m_errors.extend(err.into_iter().map(ErrorValue::Error));
                     false
                 }
             }
@@ -502,9 +507,7 @@ impl StmtVisitor for StmtEvaluator {
             Ok(result) => {
                 self.m_errors.push(ErrorValue::Return(result));
             }
-            Err(err) => self
-                .m_errors
-                .extend(err.into_iter().map(|err| ErrorValue::Error(err))),
+            Err(err) => self.m_errors.extend(err.into_iter().map(ErrorValue::Error)),
         }
     }
 }

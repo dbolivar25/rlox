@@ -24,13 +24,25 @@ pub enum Callable {
 }
 
 impl Callable {
-    pub fn call(&self, arguments: Vec<Value>) -> Result<Value, Vec<String>> {
+    pub fn call(&self, arguments: Vec<(Option<String>, Value)>) -> Result<Value, Vec<String>> {
         match self {
-            Callable::NativeFunction(_env, _arity, call) => Ok(call(arguments)),
+            Callable::NativeFunction(_env, _arity, call) => {
+                Ok(call(arguments.into_iter().map(|(_, v)| v).collect()))
+            }
             Callable::Function(env, params, _arity, stmt) => {
                 let inner_scope = Environment::new_scope(env.as_ref().unwrap());
 
-                for (param, argument) in params.iter().zip(arguments.iter()) {
+                for (param, (_ident, argument)) in params.iter().zip(arguments.iter()) {
+                    // match _ident {
+                    //     Some(ident) => inner_scope
+                    //         .borrow_mut()
+                    //         .assign(ident.clone(), argument.clone())
+                    //         .unwrap(),
+                    //     None => inner_scope
+                    //         .borrow_mut()
+                    //         .define(format!("{}", param), argument.clone()),
+                    // }
+
                     inner_scope
                         .borrow_mut()
                         .define(format!("{}", param), argument.clone())
@@ -69,7 +81,7 @@ impl Debug for Callable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Callable::NativeFunction(_env, _arity, _call) => write!(f, "<native function>"),
-            Callable::Function(_env, param, _arity, _stmt) => write!(f, "<function>{:?}", _stmt,),
+            Callable::Function(_env, _param, _arity, _stmt) => write!(f, "<function>{:?}", _stmt,),
         }
     }
 }

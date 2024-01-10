@@ -105,7 +105,8 @@ impl Interpreter {
                 None,
                 1,
                 Box::new(|args| {
-                    println!("{}{:#?}", stringify!(args[0]), args[0]);
+                    dbg!(&args);
+                    println!("value = {:#?}", args[0]);
                     Value::Nil
                 }),
             )),
