@@ -1,0 +1,28 @@
+
+fun caller(g) {
+  g();
+  // g should be a function, not nil.
+  println(g == nil); // expect: false
+}
+
+fun callCaller() {
+  let capturedVar = "before";
+  let a = "a";
+
+  fun f() {
+    capturedVar = "after";
+    
+    print("second: ");
+    println(capturedVar);
+  }
+
+  print("first: ");
+  println(capturedVar);
+
+  caller(f);
+  
+  print("third: ");
+  println(capturedVar);
+}
+
+callCaller();

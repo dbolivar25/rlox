@@ -1,0 +1,30 @@
+let reset;
+
+fun makeCounter() {
+  let i = 0;
+
+  fun count() {
+    i = i + 1;
+    println(i);
+  }
+
+  dbg("count", count);
+  dbg("reset", reset);
+
+  return count;
+}
+
+dbg("makeCounter", makeCounter);
+dbg("reset", reset);
+
+let counter = makeCounter();
+dbg("counter", counter);
+dbg("reset", reset);
+
+
+counter(); // "1".
+counter(); // "2".
+counter(); // "3".
+
+reset(); // error, because reset is not defined.
+
