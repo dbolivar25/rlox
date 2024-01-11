@@ -1,4 +1,3 @@
-
 use crate::environment::*;
 use crate::lexer::*;
 use crate::parser::*;
@@ -7,6 +6,7 @@ use crate::value::*;
 use crate::visitor::*;
 
 use std::cell::RefCell;
+use std::io::Write;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -69,6 +69,7 @@ impl Interpreter {
                 1,
                 Box::new(|args| {
                     print!("{}", args[0]);
+                    std::io::stdout().flush().unwrap();
                     Value::Nil
                 }),
             )),
@@ -95,6 +96,24 @@ impl Interpreter {
                     let mut input = String::new();
                     std::io::stdin().read_line(&mut input).unwrap();
                     Value::String(input.trim_end().into())
+                }),
+            )),
+        );
+
+        global_env.borrow_mut().define(
+            "parse".into(),
+            Value::Callable(Callable::NativeFunction(
+                None,
+                1,
+                Box::new(|args| match args[0] {
+                    Value::String(ref string) => {
+                        let result = string.parse::<f64>();
+                        match result {
+                            Ok(number) => Value::Number(number),
+                            Err(_) => Value::Nil,
+                        }
+                    }
+                    _ => Value::Nil,
                 }),
             )),
         );

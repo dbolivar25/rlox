@@ -1,0 +1,28 @@
+
+println("Enter a number between 1 and 100:");
+print("|> ");
+let input = read_line();
+
+while (input != "quit") {
+  let result = parse(input);
+
+  if (result != nil)  {
+    if (result >= 1 and result <= 100) {
+      print("You entered ");
+      print(input);
+      println("!");
+      println("");
+    } else {
+      println("Error: Input must be between 1 and 100.");
+      println("");
+    }
+  } else {
+    println("Error: Input must be a number.");
+    println("");
+  }
+
+  println("Enter a number between 1 and 100:");
+  print("|> ");
+  
+  input = read_line();
+}
