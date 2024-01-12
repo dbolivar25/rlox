@@ -5,6 +5,7 @@ use crate::parser::*;
 use crate::value::*;
 use crate::visitor::*;
 
+use rand::Rng;
 use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
@@ -126,6 +127,52 @@ impl Interpreter {
                 Box::new(|args| {
                     println!("{} => {:?}\n", args[0], args[1]);
                     Value::Nil
+                }),
+            )),
+        );
+
+        global_env.borrow_mut().define(
+            "rand".to_string(),
+            Value::Callable(Callable::NativeFunction(
+                None,
+                0,
+                Box::new(|_| Value::Number(rand::random::<f64>())),
+            )),
+        );
+
+        global_env.borrow_mut().define(
+            "rand_range".to_string(),
+            Value::Callable(Callable::NativeFunction(
+                None,
+                2,
+                Box::new(|args| {
+                    let mut rng = rand::thread_rng();
+                    let min = args[0].as_number().unwrap();
+                    let max = args[1].as_number().unwrap();
+                    Value::Number(rng.gen_range(min..max))
+                }),
+            )),
+        );
+
+        global_env.borrow_mut().define(
+            "rand_int".to_string(),
+            Value::Callable(Callable::NativeFunction(
+                None,
+                0,
+                Box::new(|_| Value::Number(rand::random::<i64>() as f64)),
+            )),
+        );
+
+        global_env.borrow_mut().define(
+            "rand_int_range".to_string(),
+            Value::Callable(Callable::NativeFunction(
+                None,
+                2,
+                Box::new(|args| {
+                    let mut rng = rand::thread_rng();
+                    let min = args[0].as_number().unwrap() as i64;
+                    let max = args[1].as_number().unwrap() as i64;
+                    Value::Number(rng.gen_range(min..max) as f64)
                 }),
             )),
         );
