@@ -1,0 +1,15 @@
+let count = 0;
+
+let closure = fun (count) {
+  return fun (a) {
+    count = count + a;
+    return count;
+  };
+}(count);
+
+dbg("closure", closure);
+
+println(closure(1));
+println(closure(2));
+println(closure(3));
+

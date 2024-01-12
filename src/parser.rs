@@ -81,6 +81,67 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Expr> {
+        if multi_match_token!(self, [[Fun], [LeftParen]]) {
+            self.take_next();
+            self.take_next();
+
+            let mut parameters = Vec::new();
+            if !match_token!(self, [RightParen]) {
+                loop {
+                    if parameters.len() >= 255 {
+                        self.m_errors.push(format!(
+                            "Cannot have more than 255 parameters\n    => line {} | column {}",
+                            self.m_current.as_ref().unwrap().get_line_number(),
+                            self.m_current.as_ref().unwrap().get_col_range().start + 1
+                        ));
+                        return Err(anyhow::anyhow!(""));
+                    }
+
+                    parameters.push(self.take_next().unwrap());
+
+                    if !match_token!(self, [Comma]) {
+                        break;
+                    }
+
+                    self.take_next();
+                }
+            }
+
+            if match_token!(self, [RightParen]) {
+                self.take_next();
+            } else {
+                self.m_errors.push(format!(
+                    "Expected ')' after function parameters\n    => line {} | column {}",
+                    self.m_previous.as_ref().unwrap().get_line_number(),
+                    self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                ));
+                return Err(anyhow::anyhow!(""));
+            }
+
+            if match_token!(self, [LeftBrace]) {
+                let body = self.statement()?;
+                let body = match body {
+                    Stmt::Block { m_statements } => m_statements,
+                    _ => {
+                        self.m_errors.push(format!(
+                            "Expected block after function declaration\n    => line {} | column {}",
+                            self.m_previous.as_ref().unwrap().get_line_number(),
+                            self.m_previous.as_ref().unwrap().get_col_range().start + 1,
+                        ));
+                        return Err(anyhow::anyhow!(""));
+                    }
+                };
+                return Ok(Expr::new_function(parameters, body));
+            } else {
+                self.m_errors.push(format!(
+                    "Expected '{{' after function declaration\n    => line {} | column {}",
+                    self.m_previous.as_ref().unwrap().get_line_number(),
+                    self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                ));
+                return Err(anyhow::anyhow!(""));
+            }
+        }
+
         if match_token!(self, [False, True, String(_), Number(_), Nil]) {
             return Ok(Expr::new_literal(self.take_next().unwrap()));
         }
@@ -586,6 +647,7 @@ impl Parser {
 
         if multi_match_token!(self, [[Fun], [Identifier(_)]]) {
             self.take_next();
+
             let name = if let TokenType::Identifier(_) = self.peek_next().unwrap().get_token_type()
             {
                 self.take_next().unwrap()

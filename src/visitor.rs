@@ -16,6 +16,7 @@ pub trait ExprVisitor {
     fn visit_assign(&mut self, token: &Token, expression: &Expr);
     fn visit_logical(&mut self, left: &Expr, token: &Token, right: &Expr);
     fn visit_call(&mut self, callee: &Expr, paren: &Token, arguments: &[Expr]);
+    fn visit_function(&mut self, params: &[Token], body: &[Stmt]);
 }
 
 pub struct ExprEvaluator {
@@ -353,6 +354,17 @@ impl ExprVisitor for ExprEvaluator {
                     .push(format!("Invalid call expression => {:?}", callee));
             }
         }
+    }
+
+    fn visit_function(&mut self, params: &[Token], body: &[Stmt]) {
+        let callable = Value::Callable(Callable::Function(
+            Some(self.m_env.clone()),
+            params.to_vec(),
+            params.len(),
+            Box::new(Stmt::new_block(body.to_vec())),
+        ));
+
+        self.m_result.push(callable);
     }
 }
 

@@ -51,6 +51,7 @@ define_ast!(
     assign: Assign(m_token: Token, m_value: Box<Expr>),
     logical: Logical(m_left: Box<Expr>, m_token: Token, m_right: Box<Expr>),
     call: Call(m_callee: Box<Expr>, m_paren: Token, m_arguments: Vec<Expr>),
+    function: Function(m_params: Vec<Token>, m_body: Vec<Stmt>),
 );
 
 impl Debug for Expr {
@@ -87,6 +88,35 @@ impl Debug for Expr {
                     .map(|e| format!("{:?}", e))
                     .join(", ")
             ),
+            Expr::Function { m_params, m_body } => {
+                let mut s = String::new();
+                for (i, param) in m_params.iter().enumerate() {
+                    if i == 0 {
+                        s.push_str(&format!("{:?}", param));
+                    } else {
+                        s.push_str(&format!(", {:?}", param));
+                    }
+                }
+
+                write!(
+                    f,
+                    "fun({}) {{ {}}} ",
+                    s,
+                    m_body
+                        .iter()
+                        .enumerate()
+                        .map(|(i, stmt)| if i == 0 && m_body.len() == i + 1 {
+                            format!("{:?}", stmt)
+                        } else if i == 0 {
+                            format!("{:?}", stmt)
+                        } else if m_body.len() == i + 1 {
+                            format!("{:?}", stmt)
+                        } else {
+                            format!("{:?}", stmt)
+                        })
+                        .join("")
+                )
+            }
         }
     }
 }

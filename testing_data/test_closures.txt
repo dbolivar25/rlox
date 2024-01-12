@@ -1,8 +1,12 @@
 let a = "global";
 {
-  fun showA() {
-    println(a);
+  fun createScope(var) {
+    return fun () {
+      println(var);
+    };
   }
+
+  let showA = createScope(a);
 
   showA();
   let a = "block";
