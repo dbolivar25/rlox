@@ -68,13 +68,13 @@ cd rlox
 
 ## Usage
 
-To run the REPL execute the following command
+### REPL Interpreter
 
 ```
 cargo run
 ```
 
-To run the file interpreter execute the following command
+### File Interpreter
 
 ```
 cargo run -- -f <your_file_name>
