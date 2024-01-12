@@ -2,7 +2,40 @@ use crate::ast::*;
 use crate::token::*;
 
 use anyhow::Result;
+use itertools::Itertools;
 use std::iter::Peekable;
+
+macro_rules! match_token {
+    ($self:ident, [$($token_type:ident $(($($inner:tt)*))? ),*]) => {
+        $self.peek_next().is_some_and(|token| match token.get_token_type() {
+            $(
+                TokenType::$token_type $(($($inner)*))? => true,
+            )*
+            _ => false,
+        })
+    };
+}
+
+macro_rules! multi_match_token {
+    ($self:ident, [$([$($token_type:ident $(($($inner:tt)*))? ),*]),*]) => {{
+        let mut iter = $self.m_token_iter.clone().multipeek();
+        let mut result = true;
+
+        $(
+            result &= iter.peek().map_or(false, |token| {
+                match token.get_token_type() {
+                    $(
+                        // Match for variants with and without data
+                        TokenType::$token_type $(($($inner)*))? => true,
+                        _ => false,
+                    )*
+                }
+            });
+        )*
+
+        result
+    }};
+}
 
 #[derive(Debug)]
 pub struct Parser {
@@ -32,19 +65,6 @@ impl Parser {
         self.m_current.clone()
     }
 
-    fn matches(&mut self, types: &[TokenType]) -> bool {
-        self.peek_next().is_some_and(|token| {
-            types
-                .iter()
-                .any(|token_type| match (token.get_token_type(), token_type) {
-                    (TokenType::Number(_), TokenType::Number(_)) => true,
-                    (TokenType::String(_), TokenType::String(_)) => true,
-                    (TokenType::Identifier(_), TokenType::Identifier(_)) => true,
-                    (lhs, rhs) => lhs == rhs,
-                })
-        })
-    }
-
     fn sync(&mut self) {
         while let Some(token) = self.take_next() {
             if token.get_token_type() == &TokenType::Semicolon {
@@ -61,25 +81,19 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Expr> {
-        if self.matches(&[
-            TokenType::False,
-            TokenType::True,
-            TokenType::Nil,
-            TokenType::Number(0.0),
-            TokenType::String("".into()),
-        ]) {
+        if match_token!(self, [False, True, String(_), Number(_), Nil]) {
             return Ok(Expr::new_literal(self.take_next().unwrap()));
         }
 
-        if self.matches(&[TokenType::Identifier("".into())]) {
+        if match_token!(self, [Identifier(_)]) {
             return Ok(Expr::new_variable(self.take_next().unwrap()));
         }
 
-        if self.matches(&[TokenType::LeftParen]) {
+        if match_token!(self, [LeftParen]) {
             self.take_next();
             let expr = self.expression()?;
 
-            while !self.matches(&[TokenType::RightParen]) {
+            while !match_token!(self, [RightParen]) {
                 if self.take_next().is_none() {
                     self.m_errors.push(format!(
                         "Unterminated grouping, expected ')'\n    => line {} | column {}",
@@ -118,7 +132,7 @@ impl Parser {
     fn finish_call(&mut self, callee: Expr) -> Result<Expr> {
         let mut arguments = Vec::new();
 
-        if !self.matches(&[TokenType::RightParen]) {
+        if !match_token!(self, [RightParen]) {
             loop {
                 if arguments.len() >= 255 {
                     self.m_errors.push(format!(
@@ -131,7 +145,7 @@ impl Parser {
 
                 arguments.push(self.expression()?);
 
-                if !self.matches(&[TokenType::Comma]) {
+                if !match_token!(self, [Comma]) {
                     break;
                 }
 
@@ -175,7 +189,7 @@ impl Parser {
         let mut expr = self.primary()?;
 
         loop {
-            if self.matches(&[TokenType::LeftParen]) {
+            if match_token!(self, [LeftParen]) {
                 self.take_next();
                 expr = self.finish_call(expr)?;
             } else {
@@ -187,7 +201,7 @@ impl Parser {
     }
 
     fn unary(&mut self) -> Result<Expr> {
-        if self.matches(&[TokenType::Bang, TokenType::Minus]) {
+        if match_token!(self, [Bang, Minus]) {
             let operator = self.take_next().unwrap();
             let right = self.unary()?;
             return Ok(Expr::new_unary(operator, Box::new(right)));
@@ -199,7 +213,7 @@ impl Parser {
     fn factor(&mut self) -> Result<Expr> {
         let mut expr = self.unary()?;
 
-        while self.matches(&[TokenType::Slash, TokenType::Star]) {
+        while match_token!(self, [Slash, Star]) {
             let operator = self.take_next().unwrap();
             let right = self.unary()?;
             expr = Expr::new_binary(Box::new(expr), operator, Box::new(right));
@@ -211,7 +225,7 @@ impl Parser {
     fn term(&mut self) -> Result<Expr> {
         let mut expr = self.factor()?;
 
-        while self.matches(&[TokenType::Minus, TokenType::Plus]) {
+        while match_token!(self, [Minus, Plus]) {
             let operator = self.take_next().unwrap();
             let right = self.factor()?;
             expr = Expr::new_binary(Box::new(expr), operator, Box::new(right));
@@ -223,12 +237,7 @@ impl Parser {
     fn comparison(&mut self) -> Result<Expr> {
         let mut expr = self.term()?;
 
-        while self.matches(&[
-            TokenType::Greater,
-            TokenType::GreaterEqual,
-            TokenType::Less,
-            TokenType::LessEqual,
-        ]) {
+        while match_token!(self, [Greater, GreaterEqual, Less, LessEqual]) {
             let operator = self.take_next().unwrap();
             let right = self.term()?;
             expr = Expr::new_binary(Box::new(expr), operator, Box::new(right));
@@ -240,7 +249,7 @@ impl Parser {
     fn equality(&mut self) -> Result<Expr> {
         let mut expr = self.comparison()?;
 
-        while self.matches(&[TokenType::BangEqual, TokenType::EqualEqual]) {
+        while match_token!(self, [BangEqual, EqualEqual]) {
             let operator = self.take_next().unwrap();
             let right = self.comparison()?;
             expr = Expr::new_binary(Box::new(expr), operator, Box::new(right));
@@ -252,7 +261,7 @@ impl Parser {
     fn and(&mut self) -> Result<Expr> {
         let mut expr = self.equality()?;
 
-        while self.matches(&[TokenType::And]) {
+        while match_token!(self, [And]) {
             let operator = self.take_next().unwrap();
             let right = self.equality()?;
             expr = Expr::new_logical(Box::new(expr), operator, Box::new(right));
@@ -264,7 +273,7 @@ impl Parser {
     fn or(&mut self) -> Result<Expr> {
         let mut expr = self.and()?;
 
-        while self.matches(&[TokenType::Or]) {
+        while match_token!(self, [Or]) {
             let operator = self.take_next().unwrap();
             let right = self.and()?;
             expr = Expr::new_logical(Box::new(expr), operator, Box::new(right));
@@ -276,7 +285,7 @@ impl Parser {
     fn assignment(&mut self) -> Result<Expr> {
         let expr = self.or()?;
 
-        if self.matches(&[TokenType::Equal]) {
+        if match_token!(self, [Equal]) {
             let equals = self.take_next().unwrap();
             let value = self.assignment()?;
 
@@ -331,10 +340,10 @@ impl Parser {
         //     return Ok(Stmt::new_print(expr));
         // }
 
-        if self.matches(&[TokenType::LeftBrace]) {
+        if match_token!(self, [LeftBrace]) {
             self.take_next();
             let mut statements = Vec::new();
-            while !self.matches(&[TokenType::RightBrace]) {
+            while !match_token!(self, [RightBrace]) {
                 if self.peek_next().is_none() {
                     self.m_errors.push(format!(
                         "Unterminated block, expected '}}'\n    => line {} | column {}",
@@ -349,15 +358,15 @@ impl Parser {
             return Ok(Stmt::new_block(statements));
         }
 
-        if self.matches(&[TokenType::If]) {
+        if match_token!(self, [If]) {
             self.take_next();
-            if self.matches(&[TokenType::LeftParen]) {
+            if match_token!(self, [LeftParen]) {
                 self.take_next();
                 let condition = self.expression()?;
-                if self.matches(&[TokenType::RightParen]) {
+                if match_token!(self, [RightParen]) {
                     self.take_next();
                     let then_branch = Box::new(self.statement()?);
-                    let else_branch = if self.matches(&[TokenType::Else]) {
+                    let else_branch = if match_token!(self, [Else]) {
                         self.take_next();
                         Some(Box::new(self.statement()?))
                     } else {
@@ -382,12 +391,12 @@ impl Parser {
             }
         }
 
-        if self.matches(&[TokenType::While]) {
+        if match_token!(self, [While]) {
             self.take_next();
-            if self.matches(&[TokenType::LeftParen]) {
+            if match_token!(self, [LeftParen]) {
                 self.take_next();
                 let condition = self.expression()?;
-                if self.matches(&[TokenType::RightParen]) {
+                if match_token!(self, [RightParen]) {
                     self.take_next();
                     let body = Box::new(self.statement()?);
                     return Ok(Stmt::new_while(condition, body));
@@ -409,17 +418,17 @@ impl Parser {
             }
         }
 
-        if self.matches(&[TokenType::For]) {
+        if match_token!(self, [For]) {
             self.take_next();
-            if self.matches(&[TokenType::LeftParen]) {
+            if match_token!(self, [LeftParen]) {
                 self.take_next();
-                let initializer = if self.matches(&[TokenType::Semicolon]) {
+                let initializer = if match_token!(self, [Semicolon]) {
                     None
-                } else if self.matches(&[TokenType::Var]) {
+                } else if match_token!(self, [Var]) {
                     Some(self.declaration()?)
                 } else {
                     let expr = self.expression()?;
-                    if self.matches(&[TokenType::Semicolon]) {
+                    if match_token!(self, [Semicolon]) {
                         self.take_next();
                     } else {
                         self.m_errors.push(format!(
@@ -433,13 +442,13 @@ impl Parser {
                     Some(Stmt::new_expression(expr))
                 };
 
-                let condition = if self.matches(&[TokenType::Semicolon]) {
+                let condition = if match_token!(self, [Semicolon]) {
                     None
                 } else {
                     Some(self.expression()?)
                 };
 
-                if self.matches(&[TokenType::Semicolon]) {
+                if match_token!(self, [Semicolon]) {
                     self.take_next();
                 } else {
                     self.m_errors.push(format!(
@@ -450,13 +459,13 @@ impl Parser {
                     return Err(anyhow::anyhow!(""));
                 }
 
-                let increment = if self.matches(&[TokenType::RightParen]) {
+                let increment = if match_token!(self, [RightParen]) {
                     None
                 } else {
                     Some(self.expression()?)
                 };
 
-                if self.matches(&[TokenType::RightParen]) {
+                if match_token!(self, [RightParen]) {
                     self.take_next();
                 } else {
                     self.m_errors.push(format!(
@@ -526,7 +535,7 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Result<Stmt> {
-        if self.matches(&[TokenType::Var]) {
+        if match_token!(self, [Var]) {
             self.take_next();
             let name = self.take_next().unwrap();
 
@@ -539,7 +548,7 @@ impl Parser {
                 return Err(anyhow::anyhow!(""));
             }
 
-            let initializer = if self.matches(&[TokenType::Equal]) {
+            let initializer = if match_token!(self, [Equal]) {
                 self.take_next();
                 Some(self.expression()?)
             } else {
@@ -575,19 +584,19 @@ impl Parser {
             return Ok(Stmt::new_var(name, initializer));
         }
 
-        if self.matches(&[TokenType::Fun]) {
+        if multi_match_token!(self, [[Fun], [Identifier(_)]]) {
             self.take_next();
-            let name =
-                if let TokenType::Identifier(_) = self.peek_next().unwrap().get_token_type() {
-                    self.take_next().unwrap()
-                } else {
-                    self.m_errors.push(format!(
-                        "Expected identifier after 'fun'\n    => line {} | column {}",
-                        self.m_previous.as_ref().unwrap().get_line_number(),
-                        self.m_previous.as_ref().unwrap().get_col_range().start + 1
-                    ));
-                    return Err(anyhow::anyhow!(""));
-                };
+            let name = if let TokenType::Identifier(_) = self.peek_next().unwrap().get_token_type()
+            {
+                self.take_next().unwrap()
+            } else {
+                self.m_errors.push(format!(
+                    "Expected identifier after 'fun'\n    => line {} | column {}",
+                    self.m_previous.as_ref().unwrap().get_line_number(),
+                    self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                ));
+                return Err(anyhow::anyhow!(""));
+            };
 
             // if !matches!(name.get_token_type(), TokenType::Identifier(_)) {
             //     self.m_errors.push(format!(
@@ -598,10 +607,10 @@ impl Parser {
             //     return Err(anyhow::anyhow!(""));
             // }
 
-            if self.matches(&[TokenType::LeftParen]) {
+            if match_token!(self, [LeftParen]) {
                 self.take_next();
                 let mut parameters = Vec::new();
-                if !self.matches(&[TokenType::RightParen]) {
+                if !match_token!(self, [RightParen]) {
                     loop {
                         if parameters.len() >= 255 {
                             self.m_errors.push(format!(
@@ -614,7 +623,7 @@ impl Parser {
 
                         parameters.push(self.take_next().unwrap());
 
-                        if !self.matches(&[TokenType::Comma]) {
+                        if !match_token!(self, [Comma]) {
                             break;
                         }
 
@@ -622,7 +631,7 @@ impl Parser {
                     }
                 }
 
-                if self.matches(&[TokenType::RightParen]) {
+                if match_token!(self, [RightParen]) {
                     self.take_next();
                 } else {
                     self.m_errors.push(format!(
@@ -633,7 +642,7 @@ impl Parser {
                     return Err(anyhow::anyhow!(""));
                 }
 
-                if self.matches(&[TokenType::LeftBrace]) {
+                if match_token!(self, [LeftBrace]) {
                     let body = self.statement()?;
                     let body = match body {
                         Stmt::Block { m_statements } => m_statements,
@@ -665,10 +674,10 @@ impl Parser {
             }
         }
 
-        if self.matches(&[TokenType::Return]) {
+        if match_token!(self, [Return]) {
             self.take_next();
             let keyword = self.m_previous.clone().unwrap();
-            let value = if !self.matches(&[TokenType::Semicolon]) {
+            let value = if !match_token!(self, [Semicolon]) {
                 Some(self.expression()?)
             } else {
                 None
