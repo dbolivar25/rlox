@@ -9,6 +9,17 @@ let a = "global";
   let showA = createScope(a);
 
   showA();
+  a = "block";
+  showA();
+}
+
+let a = "global";
+{
+  let showA = fun () {
+    println(a);
+  };
+
+  showA();
   let a = "block";
   showA();
 }

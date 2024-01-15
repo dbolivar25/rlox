@@ -485,8 +485,56 @@ impl Parser {
                 self.take_next();
                 let initializer = if match_token!(self, [Semicolon]) {
                     None
-                } else if match_token!(self, [Var]) {
-                    Some(self.declaration()?)
+                } else if multi_match_token!(self, [[Var], [Identifier(_)], [Equal]]) {
+                    self.take_next();
+                    let name = self.take_next().unwrap();
+
+                    if !matches!(name.get_token_type(), TokenType::Identifier(_)) {
+                        self.m_errors.push(format!(
+                            "Expected identifier after 'var'\n    => line {} | column {}",
+                            name.get_line_number().saturating_sub(1),
+                            name.get_col_range().start + 1
+                        ));
+                        return Err(anyhow::anyhow!(""));
+                    }
+
+                    let initializer = if match_token!(self, [Equal]) {
+                        self.take_next();
+                        Some(self.expression()?)
+                    } else {
+                        None
+                    };
+
+                    match self.take_next() {
+                        Some(token) => {
+                            if token.get_token_type() == &TokenType::Semicolon {
+                            } else {
+                                self.m_errors.push(format!(
+                                    "Expected ';' after variable declaration\n    => line {} | column {}",
+                                    token.get_line_number().saturating_sub(1),
+                                    token.get_col_range().start + 1
+                                ));
+                                return Err(anyhow::anyhow!(""));
+                            }
+                        }
+                        None => {
+                            self.m_errors.push(format!(
+                                "Expected ';' after variable declaration\n    => line {} | column {}",
+                                self.m_previous
+                                    .as_ref()
+                                    .unwrap()
+                                    .get_line_number()
+                                    .saturating_sub(1),
+                                self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                            ));
+                            return Err(anyhow::anyhow!(""));
+                        }
+                    }
+
+                    Some(Stmt::new_expression(Expr::new_assign(
+                        name,
+                        Box::new(initializer.unwrap()),
+                    )))
                 } else {
                     let expr = self.expression()?;
                     if match_token!(self, [Semicolon]) {
@@ -551,7 +599,31 @@ impl Parser {
                 }
 
                 if let Some(initializer) = initializer {
-                    body = Box::new(Stmt::new_block(vec![initializer, *body]));
+                    let initializer_definition = match initializer {
+                        Stmt::Expression { m_expression } => match m_expression {
+                            Expr::Assign {
+                                m_token: m_name,
+                                m_value,
+                            } => Stmt::new_var(m_name, Some(*m_value), vec![*body]),
+                            _ => {
+                                self.m_errors.push(format!(
+                                    "Expected expression after 'var'\n    => line {} | column {}",
+                                    self.m_previous.as_ref().unwrap().get_line_number(),
+                                    self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                                ));
+                                return Err(anyhow::anyhow!(""));
+                            }
+                        },
+                        _ => {
+                            self.m_errors.push(format!(
+                                "Expected expression after 'var'\n    => line {} | column {}",
+                                self.m_previous.as_ref().unwrap().get_line_number(),
+                                self.m_previous.as_ref().unwrap().get_col_range().start + 1
+                            ));
+                            return Err(anyhow::anyhow!(""));
+                        }
+                    };
+                    body = Box::new(initializer_definition);
                 }
 
                 return Ok(*body);
@@ -647,7 +719,7 @@ impl Parser {
                 statements.push(self.declaration()?);
             }
             // self.take_next();
-            
+
             return Ok(Stmt::new_var(name, initializer, statements));
         }
 
