@@ -1,0 +1,11 @@
+let global = "global";
+
+{
+  let func = fun() {
+    println(global);
+  };
+
+  func();
+  let global = "local";
+  func();
+}
