@@ -1,11 +1,11 @@
 mod ast;
+mod environment;
 mod interpreter;
 mod lexer;
-mod value;
 mod parser;
 mod token;
+mod value;
 mod visitor;
-mod environment;
 
 use interpreter::*;
 
@@ -35,17 +35,33 @@ impl App {
 
     pub fn run_repl_interpreter() -> Result<()> {
         let mut input = String::new();
+        let mut read_buffer = String::new();
         let mut interpreter = Interpreter::new();
 
+        println!("");
         loop {
-            print!("\n|>  ");
-            std::io::stdout().flush()?;
-            std::io::stdin().read_line(&mut input)?;
+            loop {
+                print!("|>  ");
+                std::io::stdout().flush()?;
+                std::io::stdin().read_line(&mut read_buffer)?;
+
+                input.push_str(&read_buffer);
+
+                // allow multiline input by the user entering an empty line to end the input
+                match read_buffer.trim() {
+                    "" | "q" | "quit" => break,
+                    _ => (),
+                }
+
+                read_buffer.clear();
+            }
 
             match input.trim() {
-                "" | "q" | "quit" => break,
+                "q" | "quit" => break,
                 input => interpreter.interpret(input.into()),
             }
+
+            println!("");
 
             input.clear();
         }
