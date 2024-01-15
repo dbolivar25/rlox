@@ -642,7 +642,13 @@ impl Parser {
                 }
             }
 
-            return Ok(Stmt::new_var(name, initializer));
+            let mut statements = Vec::new();
+            while self.peek_next().is_some() && !match_token!(self, [RightBrace, Eof]) {
+                statements.push(self.declaration()?);
+            }
+            // self.take_next();
+            
+            return Ok(Stmt::new_var(name, initializer, statements));
         }
 
         if multi_match_token!(self, [[Fun], [Identifier(_)]]) {

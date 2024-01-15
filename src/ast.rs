@@ -83,10 +83,7 @@ impl Debug for Expr {
                 f,
                 "{:?}({})",
                 m_callee,
-                m_arguments
-                    .iter()
-                    .map(|e| format!("{:?}", e))
-                    .join(", ")
+                m_arguments.iter().map(|e| format!("{:?}", e)).join(", ")
             ),
             Expr::Function { m_params, m_body } => {
                 let mut s = String::new();
@@ -126,7 +123,7 @@ define_ast!(
     StmtVisitor,
     block: Block(m_statements: Vec<Stmt>),
     expression: Expression(m_expression: Expr),
-    var: Var(m_name: Token, m_initializer: Option<Expr>),
+    var: Var(m_name: Token, m_initializer: Option<Expr>, m_statements: Vec<Stmt>),
     r#while: While(m_condition: Expr, m_body: Box<Stmt>),
     r#if: If(m_condition: Expr, m_then_branch: Box<Stmt>, m_else_branch: Option<Box<Stmt>>),
     function: Function(m_name: Token, m_params: Vec<Token>, m_body: Vec<Stmt>),
@@ -157,8 +154,15 @@ impl Debug for Stmt {
             Stmt::Var {
                 m_name,
                 m_initializer,
+                m_statements,
             } => match m_initializer {
-                Some(expr) => write!(f, "let {} = {:?}; ", m_name, expr),
+                Some(expr) => write!(
+                    f,
+                    "let {} = {:?}; \n{}",
+                    m_name,
+                    expr,
+                    m_statements.iter().map(|s| format!("{:?}", s)).join("\n")
+                ),
                 None => write!(f, "let {}; ", m_name),
             },
             Stmt::While {

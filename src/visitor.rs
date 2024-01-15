@@ -371,7 +371,7 @@ impl ExprVisitor for ExprEvaluator {
 pub trait StmtVisitor {
     fn visit_block(&mut self, statements: &[Stmt]);
     fn visit_expression(&mut self, expression: &Expr);
-    fn visit_var(&mut self, name: &Token, initializer: &Option<Expr>);
+    fn visit_var(&mut self, name: &Token, initializer: &Option<Expr>, statements: &[Stmt]);
     fn visit_while(&mut self, condition: &Expr, body: &Stmt);
     fn visit_if(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Box<Stmt>>);
     fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]);
@@ -438,7 +438,7 @@ impl StmtVisitor for StmtEvaluator {
         }
     }
 
-    fn visit_var(&mut self, name: &Token, initializer: &Option<Expr>) {
+    fn visit_var(&mut self, name: &Token, initializer: &Option<Expr>, statements: &[Stmt]) {
         let mut visitor = ExprEvaluator::new(&self.m_env);
         if let Some(initializer) = initializer {
             initializer.accept(&mut visitor);
@@ -446,7 +446,15 @@ impl StmtVisitor for StmtEvaluator {
         match visitor.get_result() {
             Ok(result) => {
                 if let TokenType::Identifier(name) = name.get_token_type() {
-                    self.m_env.borrow_mut().define(name.to_string(), result);
+                    let inner_scope = Environment::new_scope(&self.m_env);
+                    inner_scope.borrow_mut().define(name.to_string(), result);
+                    for stmt in statements.iter() {
+                        let mut visitor = StmtEvaluator::new(&inner_scope);
+                        stmt.accept(&mut visitor);
+                        if let Err(err) = visitor.get_result() {
+                            self.m_errors.extend(err);
+                        }
+                    }
                 }
             }
             Err(err) => self.m_errors.extend(err.into_iter().map(ErrorValue::Error)),
