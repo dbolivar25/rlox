@@ -396,7 +396,6 @@ impl Display for ErrorValue {
 
 pub struct StmtEvaluator {
     m_env: Rc<RefCell<Environment>>,
-    m_result: Vec<Value>,
     m_errors: Vec<ErrorValue>,
 }
 
@@ -404,7 +403,6 @@ impl StmtEvaluator {
     pub fn new(env: &Rc<RefCell<Environment>>) -> Self {
         Self {
             m_env: env.clone(),
-            m_result: Vec::new(),
             m_errors: Vec::new(),
         }
     }

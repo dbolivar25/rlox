@@ -51,7 +51,7 @@ pub enum TokenType {
     Var,
     While,
 
-    Error(String),
+    // Error(String),
     Skip,
     Eof,
 }
@@ -102,7 +102,7 @@ impl Display for TokenType {
                 TokenType::Identifier(identifier) => identifier.to_string(),
                 TokenType::String(string) => string.to_string(),
                 TokenType::Number(number) => number.to_string(),
-                TokenType::Error(error) => error.to_string(),
+                // TokenType::Error(error) => error.to_string(),
             }
         )
     }

@@ -34,16 +34,6 @@ impl Callable {
                 let inner_scope = Environment::new_scope(env.as_ref().unwrap());
 
                 for (param, (_ident, argument)) in params.iter().zip(arguments.iter()) {
-                    // match _ident {
-                    //     Some(ident) => inner_scope
-                    //         .borrow_mut()
-                    //         .assign(ident.clone(), argument.clone())
-                    //         .unwrap(),
-                    //     None => inner_scope
-                    //         .borrow_mut()
-                    //         .define(format!("{}", param), argument.clone()),
-                    // }
-
                     inner_scope
                         .borrow_mut()
                         .define(format!("{}", param), argument.clone())
@@ -82,7 +72,9 @@ impl Debug for Callable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Callable::NativeFunction(_env, _arity, _call) => write!(f, "<native function>"),
-            Callable::Function(_env, _param, _arity, _stmt) => write!(f, "fun ({}) {:?}", _param.iter().join(", "), _stmt),
+            Callable::Function(_env, _param, _arity, _stmt) => {
+                write!(f, "fun ({}) {:?}", _param.iter().join(", "), _stmt)
+            }
         }
     }
 }
@@ -120,37 +112,37 @@ impl Value {
         }
     }
 
-    pub fn is_not_equal(&self, other: &Value) -> bool {
-        !self.is_equal(other)
-    }
+    // pub fn is_not_equal(&self, other: &Value) -> bool {
+    //     !self.is_equal(other)
+    // }
 
-    pub fn is_greater(&self, other: &Value) -> bool {
-        match (self, other) {
-            (Value::Number(number), Value::Number(other_number)) => number > other_number,
-            _ => false,
-        }
-    }
+    // pub fn is_greater(&self, other: &Value) -> bool {
+    //     match (self, other) {
+    //         (Value::Number(number), Value::Number(other_number)) => number > other_number,
+    //         _ => false,
+    //     }
+    // }
 
-    pub fn is_greater_or_equal(&self, other: &Value) -> bool {
-        match (self, other) {
-            (Value::Number(number), Value::Number(other_number)) => number >= other_number,
-            _ => false,
-        }
-    }
+    // pub fn is_greater_or_equal(&self, other: &Value) -> bool {
+    //     match (self, other) {
+    //         (Value::Number(number), Value::Number(other_number)) => number >= other_number,
+    //         _ => false,
+    //     }
+    // }
 
-    pub fn is_less(&self, other: &Value) -> bool {
-        match (self, other) {
-            (Value::Number(number), Value::Number(other_number)) => number < other_number,
-            _ => false,
-        }
-    }
+    // pub fn is_less(&self, other: &Value) -> bool {
+    //     match (self, other) {
+    //         (Value::Number(number), Value::Number(other_number)) => number < other_number,
+    //         _ => false,
+    //     }
+    // }
 
-    pub fn is_less_or_equal(&self, other: &Value) -> bool {
-        match (self, other) {
-            (Value::Number(number), Value::Number(other_number)) => number <= other_number,
-            _ => false,
-        }
-    }
+    // pub fn is_less_or_equal(&self, other: &Value) -> bool {
+    //     match (self, other) {
+    //         (Value::Number(number), Value::Number(other_number)) => number <= other_number,
+    //         _ => false,
+    //     }
+    // }
 
     pub fn as_number(&self) -> Option<f64> {
         match self {
@@ -159,26 +151,26 @@ impl Value {
         }
     }
 
-    pub fn as_string(&self) -> Option<String> {
-        match self {
-            Value::String(string) => Some(string.clone()),
-            _ => None,
-        }
-    }
+    // pub fn as_string(&self) -> Option<String> {
+    //     match self {
+    //         Value::String(string) => Some(string.clone()),
+    //         _ => None,
+    //     }
+    // }
 
-    pub fn as_boolean(&self) -> Option<bool> {
-        match self {
-            Value::Boolean(boolean) => Some(*boolean),
-            _ => None,
-        }
-    }
+    // pub fn as_boolean(&self) -> Option<bool> {
+    //     match self {
+    //         Value::Boolean(boolean) => Some(*boolean),
+    //         _ => None,
+    //     }
+    // }
 
-    pub fn as_some(&self) -> Option<()> {
-        match self {
-            Value::Nil => None,
-            _ => Some(()),
-        }
-    }
+    // pub fn as_some(&self) -> Option<()> {
+    //     match self {
+    //         Value::Nil => None,
+    //         _ => Some(()),
+    //     }
+    // }
 }
 
 impl std::fmt::Debug for Value {
