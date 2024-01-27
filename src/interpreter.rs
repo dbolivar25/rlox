@@ -160,7 +160,7 @@ impl Interpreter {
             Value::Callable(Callable::NativeFunction(
                 None,
                 0,
-                Box::new(|_| Value::Number(rand::random::<i64>() as f64)),
+                Box::new(|_| Value::Number(rand::random::<i32>() as f64)),
             )),
         );
 
@@ -171,8 +171,8 @@ impl Interpreter {
                 2,
                 Box::new(|args| {
                     let mut rng = rand::thread_rng();
-                    let min = args[0].as_number().unwrap() as i64;
-                    let max = args[1].as_number().unwrap() as i64;
+                    let min = args[0].as_number().unwrap() as i32;
+                    let max = args[1].as_number().unwrap() as i32;
                     Value::Number(rng.gen_range(min..max) as f64)
                 }),
             )),
