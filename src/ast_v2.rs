@@ -1,14 +1,13 @@
 use itertools::Itertools;
+use paste::paste;
 use std::fmt::Debug;
 
-use crate::token::Token;
-// use crate::visitor::*;
-
-use paste::paste;
+use crate::token_v2::*;
+use crate::visitor::*;
 
 macro_rules! define_ast {
     ($name:ident, $visitor:ident, $($variant_lowercase:ident: $variant:ident($($field_name:ident: $field:ty),*)),*,) => {
-        #[derive(Clone)]
+        #[derive(Clone, PartialEq)]
         pub enum $name {
             $(
                 $variant { $($field_name: $field),* },
@@ -43,15 +42,15 @@ macro_rules! define_ast {
 define_ast!(
     Expr,
     ExprVisitor,
-    binary: Binary(m_left: Box<Expr>, m_token: Token, m_right: Box<Expr>),
+    binary: Binary(m_left: Box<Expr>, m_token: TokenType, m_right: Box<Expr>),
     grouping: Grouping(m_expression: Box<Expr>),
-    literal: Literal(m_token: Token),
-    unary: Unary(m_token: Token, m_expression: Box<Expr>),
-    variable: Variable(m_token: Token),
-    assign: Assign(m_token: Token, m_value: Box<Expr>),
-    logical: Logical(m_left: Box<Expr>, m_token: Token, m_right: Box<Expr>),
-    call: Call(m_callee: Box<Expr>, m_paren: Token, m_arguments: Vec<Expr>),
-    function: Function(m_params: Vec<Token>, m_body: Vec<Stmt>),
+    literal: Literal(m_token: TokenType),
+    unary: Unary(m_token: TokenType, m_expression: Box<Expr>),
+    variable: Variable(m_token: TokenType),
+    assign: Assign(m_token: TokenType, m_value: Box<Expr>),
+    logical: Logical(m_left: Box<Expr>, m_token: TokenType, m_right: Box<Expr>),
+    call: Call(m_callee: Box<Expr>, m_arguments: Vec<Expr>),
+    function: Function(m_params: Vec<TokenType>, m_body: Box<Stmt>),
 );
 
 impl Debug for Expr {
@@ -77,7 +76,6 @@ impl Debug for Expr {
             } => write!(f, "{:?} {:?} {:?}", m_left, m_token, m_right),
             Expr::Call {
                 m_callee,
-                m_paren: _,
                 m_arguments,
             } => write!(
                 f,
@@ -95,24 +93,7 @@ impl Debug for Expr {
                     }
                 }
 
-                write!(
-                    f,
-                    "fun({}) {{ {}}} ",
-                    s,
-                    m_body
-                        .iter()
-                        .enumerate()
-                        .map(|(i, stmt)| if i == 0 && m_body.len() == i + 1 {
-                            format!("{:?}", stmt)
-                        } else if i == 0 {
-                            format!("{:?}", stmt)
-                        } else if m_body.len() == i + 1 {
-                            format!("{:?}", stmt)
-                        } else {
-                            format!("{:?}", stmt)
-                        })
-                        .join("")
-                )
+                write!(f, "fun({}) {{ {:?}}} ", s, m_body)
             }
         }
     }
@@ -123,11 +104,11 @@ define_ast!(
     StmtVisitor,
     block: Block(m_statements: Vec<Stmt>),
     expression: Expression(m_expression: Expr),
-    var: Var(m_name: Token, m_initializer: Option<Expr>, m_statements: Vec<Stmt>),
+    var: Var(m_name: TokenType, m_initializer: Option<Expr>),
     r#while: While(m_condition: Expr, m_body: Box<Stmt>),
     r#if: If(m_condition: Expr, m_then_branch: Box<Stmt>, m_else_branch: Option<Box<Stmt>>),
-    function: Function(m_name: Token, m_params: Vec<Token>, m_body: Vec<Stmt>),
-    r#return: Return(m_keyword: Token, m_value: Option<Expr>),
+    function: Function(m_name: TokenType, m_params: Vec<TokenType>, m_body: Box<Stmt>),
+    r#return: Return(m_value: Option<Expr>),
     // class: Class(m_name: Token, m_methods: Vec<Stmt>),
 );
 
@@ -154,15 +135,8 @@ impl Debug for Stmt {
             Stmt::Var {
                 m_name,
                 m_initializer,
-                m_statements,
             } => match m_initializer {
-                Some(expr) => write!(
-                    f,
-                    "let {} = {:?}; \n{}",
-                    m_name,
-                    expr,
-                    m_statements.iter().map(|s| format!("{:?}", s)).join("\n")
-                ),
+                Some(expr) => write!(f, "let {} = {:?}; ", m_name, expr,),
                 None => write!(f, "let {}; ", m_name),
             },
             Stmt::While {
@@ -195,30 +169,9 @@ impl Debug for Stmt {
                     }
                 }
 
-                write!(
-                    f,
-                    "fun {}({}) {{ {}}} ",
-                    m_name,
-                    s,
-                    m_body
-                        .iter()
-                        .enumerate()
-                        .map(|(i, stmt)| if i == 0 && m_body.len() == i + 1 {
-                            format!("{:?}", stmt)
-                        } else if i == 0 {
-                            format!("{:?}", stmt)
-                        } else if m_body.len() == i + 1 {
-                            format!("{:?}", stmt)
-                        } else {
-                            format!("{:?}", stmt)
-                        })
-                        .join("")
-                )
+                write!(f, "fun {}({}) {{ {:?}}} ", m_name, s, m_body)
             }
-            Stmt::Return {
-                m_keyword: _,
-                m_value,
-            } => match m_value {
+            Stmt::Return { m_value } => match m_value {
                 Some(expr) => write!(f, "return {:?}; ", expr),
                 None => write!(f, "return; "),
             },

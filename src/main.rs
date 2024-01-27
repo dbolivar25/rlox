@@ -1,9 +1,12 @@
-mod ast;
+// mod ast;
+mod ast_v2;
 mod environment;
 mod interpreter;
-mod lexer;
-mod parser;
-mod token;
+mod parser_v2;
+// mod lexer;
+// mod parser;
+// mod token;
+mod token_v2;
 mod value;
 mod visitor;
 
@@ -38,7 +41,7 @@ impl App {
         let mut read_buffer = String::new();
         let mut interpreter = Interpreter::new();
 
-        println!("");
+        println!();
         loop {
             loop {
                 print!("|>  ");
@@ -61,7 +64,7 @@ impl App {
                 input => interpreter.interpret(input.into()),
             }
 
-            println!("");
+            println!();
 
             input.clear();
         }

@@ -1,9 +1,11 @@
 let global = "global";
 
 {
-  let func = fun() {
-    println(global);
-  };
+  let func = fun(global) {
+    return fun() {
+      println(global);
+    };
+  }(global);
 
   func();
   let global = "local";

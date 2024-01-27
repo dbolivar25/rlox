@@ -2,21 +2,21 @@ use std::cell::RefCell;
 use std::fmt::Display;
 use std::rc::Rc;
 
-use crate::ast::*;
+use crate::ast_v2::*;
 use crate::environment::Environment;
-use crate::token::*;
+use crate::token_v2::*;
 use crate::value::*;
 
 pub trait ExprVisitor {
-    fn visit_binary(&mut self, left: &Expr, token: &Token, right: &Expr);
+    fn visit_binary(&mut self, left: &Expr, token: &TokenType, right: &Expr);
     fn visit_grouping(&mut self, expression: &Expr);
-    fn visit_literal(&mut self, token: &Token);
-    fn visit_unary(&mut self, token: &Token, expression: &Expr);
-    fn visit_variable(&mut self, token: &Token);
-    fn visit_assign(&mut self, token: &Token, expression: &Expr);
-    fn visit_logical(&mut self, left: &Expr, token: &Token, right: &Expr);
-    fn visit_call(&mut self, callee: &Expr, paren: &Token, arguments: &[Expr]);
-    fn visit_function(&mut self, params: &[Token], body: &[Stmt]);
+    fn visit_literal(&mut self, token: &TokenType);
+    fn visit_unary(&mut self, token: &TokenType, expression: &Expr);
+    fn visit_variable(&mut self, token: &TokenType);
+    fn visit_assign(&mut self, token: &TokenType, expression: &Expr);
+    fn visit_logical(&mut self, left: &Expr, token: &TokenType, right: &Expr);
+    fn visit_call(&mut self, callee: &Expr, arguments: &[Expr]);
+    fn visit_function(&mut self, params: &[TokenType], body: &Stmt);
 }
 
 pub struct ExprEvaluator {
@@ -47,7 +47,7 @@ impl ExprEvaluator {
 }
 
 impl ExprVisitor for ExprEvaluator {
-    fn visit_binary(&mut self, left: &Expr, token: &Token, right: &Expr) {
+    fn visit_binary(&mut self, left: &Expr, token: &TokenType, right: &Expr) {
         left.accept(self);
         right.accept(self);
 
@@ -57,7 +57,7 @@ impl ExprVisitor for ExprEvaluator {
 
         match (self.m_result.pop(), self.m_result.pop()) {
             (Some(Value::Number(right)), Some(Value::Number(left))) => {
-                self.m_result.push(match token.get_token_type() {
+                self.m_result.push(match token {
                     TokenType::Minus => Value::Number(left - right),
                     TokenType::Plus => Value::Number(left + right),
                     TokenType::Slash => Value::Number(left / right),
@@ -76,7 +76,7 @@ impl ExprVisitor for ExprEvaluator {
                 });
             }
             (Some(Value::String(right)), Some(Value::String(left))) => {
-                self.m_result.push(match token.get_token_type() {
+                self.m_result.push(match token {
                     TokenType::Plus => Value::String(format!("{}{}", left, right)),
                     TokenType::Greater => Value::Boolean(left > right),
                     TokenType::GreaterEqual => Value::Boolean(left >= right),
@@ -92,7 +92,7 @@ impl ExprVisitor for ExprEvaluator {
                 });
             }
             (Some(right), Some(left)) => {
-                self.m_result.push(match token.get_token_type() {
+                self.m_result.push(match token {
                     TokenType::BangEqual => Value::Boolean(!left.is_equal(&right)),
                     TokenType::EqualEqual => Value::Boolean(left.is_equal(&right)),
                     token_type => {
@@ -113,8 +113,8 @@ impl ExprVisitor for ExprEvaluator {
         expression.accept(self);
     }
 
-    fn visit_literal(&mut self, token: &Token) {
-        self.m_result.push(match token.get_token_type() {
+    fn visit_literal(&mut self, token: &TokenType) {
+        self.m_result.push(match token {
             TokenType::Number(number) => Value::Number(*number),
             TokenType::String(string) => Value::String(string.clone()),
             TokenType::True => Value::Boolean(true),
@@ -128,7 +128,7 @@ impl ExprVisitor for ExprEvaluator {
         });
     }
 
-    fn visit_unary(&mut self, token: &Token, expression: &Expr) {
+    fn visit_unary(&mut self, token: &TokenType, expression: &Expr) {
         expression.accept(self);
 
         if !self.m_errors.is_empty() {
@@ -137,7 +137,7 @@ impl ExprVisitor for ExprEvaluator {
 
         match self.m_result.pop() {
             Some(Value::Number(number)) => {
-                self.m_result.push(match token.get_token_type() {
+                self.m_result.push(match token {
                     TokenType::Minus => Value::Number(-number),
                     TokenType::Bang => {
                         Value::Boolean(!Value::Number(number).is_equal(&Value::Number(0.0)))
@@ -150,7 +150,7 @@ impl ExprVisitor for ExprEvaluator {
                 });
             }
             Some(Value::Boolean(boolean)) => {
-                self.m_result.push(match token.get_token_type() {
+                self.m_result.push(match token {
                     TokenType::Bang => Value::Boolean(!boolean),
                     token_type => {
                         self.m_errors
@@ -174,8 +174,8 @@ impl ExprVisitor for ExprEvaluator {
         }
     }
 
-    fn visit_variable(&mut self, token: &Token) {
-        self.m_result.push(match token.get_token_type() {
+    fn visit_variable(&mut self, token: &TokenType) {
+        self.m_result.push(match token {
             TokenType::Identifier(identifier) => match identifier.as_str() {
                 "true" => Value::Boolean(true),
                 "false" => Value::Boolean(false),
@@ -197,7 +197,7 @@ impl ExprVisitor for ExprEvaluator {
         });
     }
 
-    fn visit_assign(&mut self, token: &Token, expression: &Expr) {
+    fn visit_assign(&mut self, token: &TokenType, expression: &Expr) {
         expression.accept(self);
 
         if !self.m_errors.is_empty() {
@@ -205,7 +205,7 @@ impl ExprVisitor for ExprEvaluator {
         }
 
         match self.m_result.pop() {
-            Some(value) => match token.get_token_type() {
+            Some(value) => match token {
                 TokenType::Identifier(identifier) => {
                     if let Err(err) = self
                         .m_env
@@ -231,7 +231,7 @@ impl ExprVisitor for ExprEvaluator {
         }
     }
 
-    fn visit_logical(&mut self, left: &Expr, token: &Token, right: &Expr) {
+    fn visit_logical(&mut self, left: &Expr, token: &TokenType, right: &Expr) {
         left.accept(self);
 
         if !self.m_errors.is_empty() {
@@ -240,10 +240,10 @@ impl ExprVisitor for ExprEvaluator {
 
         match self.m_result.pop() {
             Some(Value::Boolean(left)) => {
-                if token.get_token_type() == &TokenType::Or && left {
+                if token == &TokenType::Or && left {
                     self.m_result.push(Value::Boolean(true));
                     return;
-                } else if token.get_token_type() == &TokenType::And && !left {
+                } else if token == &TokenType::And && !left {
                     self.m_result.push(Value::Boolean(false));
                     return;
                 }
@@ -272,7 +272,7 @@ impl ExprVisitor for ExprEvaluator {
 
         match self.m_result.pop() {
             Some(Value::Boolean(right)) => {
-                if matches!(token.get_token_type(), TokenType::Or | TokenType::And) {
+                if matches!(token, TokenType::Or | TokenType::And) {
                     self.m_result.push(Value::Boolean(right));
                 }
             }
@@ -291,7 +291,7 @@ impl ExprVisitor for ExprEvaluator {
         }
     }
 
-    fn visit_call(&mut self, callee: &Expr, _paren: &Token, arguments: &[Expr]) {
+    fn visit_call(&mut self, callee: &Expr, arguments: &[Expr]) {
         callee.accept(self);
 
         if !self.m_errors.is_empty() {
@@ -356,12 +356,12 @@ impl ExprVisitor for ExprEvaluator {
         }
     }
 
-    fn visit_function(&mut self, params: &[Token], body: &[Stmt]) {
+    fn visit_function(&mut self, params: &[TokenType], body: &Stmt) {
         let callable = Value::Callable(Callable::Function(
             Some(self.m_env.clone()),
             params.to_vec(),
             params.len(),
-            Box::new(Stmt::new_block(body.to_vec())),
+            Box::new(body.clone()),
         ));
 
         self.m_result.push(callable);
@@ -371,11 +371,11 @@ impl ExprVisitor for ExprEvaluator {
 pub trait StmtVisitor {
     fn visit_block(&mut self, statements: &[Stmt]);
     fn visit_expression(&mut self, expression: &Expr);
-    fn visit_var(&mut self, name: &Token, initializer: &Option<Expr>, statements: &[Stmt]);
+    fn visit_var(&mut self, name: &TokenType, initializer: &Option<Expr>);
     fn visit_while(&mut self, condition: &Expr, body: &Stmt);
     fn visit_if(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Box<Stmt>>);
-    fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]);
-    fn visit_return(&mut self, keyword: &Token, value: &Option<Expr>);
+    fn visit_function(&mut self, name: &TokenType, params: &[TokenType], body: &Stmt);
+    fn visit_return(&mut self, value: &Option<Expr>);
     // fn visit_class(&mut self, name: &Token, methods: &[Stmt]);
 }
 
@@ -436,23 +436,23 @@ impl StmtVisitor for StmtEvaluator {
         }
     }
 
-    fn visit_var(&mut self, name: &Token, initializer: &Option<Expr>, statements: &[Stmt]) {
+    fn visit_var(&mut self, name: &TokenType, initializer: &Option<Expr>) {
         let mut visitor = ExprEvaluator::new(&self.m_env);
         if let Some(initializer) = initializer {
             initializer.accept(&mut visitor);
         }
         match visitor.get_result() {
             Ok(result) => {
-                if let TokenType::Identifier(name) = name.get_token_type() {
-                    let inner_scope = Environment::new_scope(&self.m_env);
-                    inner_scope.borrow_mut().define(name.to_string(), result);
-                    for stmt in statements.iter() {
-                        let mut visitor = StmtEvaluator::new(&inner_scope);
-                        stmt.accept(&mut visitor);
-                        if let Err(err) = visitor.get_result() {
-                            self.m_errors.extend(err);
-                        }
-                    }
+                if let TokenType::Identifier(name) = name {
+                    // let inner_scope = Environment::new_scope(&self.m_env);
+                    self.m_env.borrow_mut().define(name.to_string(), result);
+                    // for stmt in statements.iter() {
+                    //     let mut visitor = StmtEvaluator::new(&inner_scope);
+                    //     stmt.accept(&mut visitor);
+                    //     if let Err(err) = visitor.get_result() {
+                    //         self.m_errors.extend(err);
+                    //     }
+                    // }
                 }
             }
             Err(err) => self.m_errors.extend(err.into_iter().map(ErrorValue::Error)),
@@ -504,12 +504,12 @@ impl StmtVisitor for StmtEvaluator {
         }
     }
 
-    fn visit_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
+    fn visit_function(&mut self, name: &TokenType, params: &[TokenType], body: &Stmt) {
         let callable = Value::Callable(Callable::Function(
             Some(self.m_env.clone()),
             params.to_vec(),
             params.len(),
-            Box::new(Stmt::new_block(body.to_vec())),
+            Box::new(body.clone()),
         ));
 
         // println!("{:?}", callable);
@@ -518,7 +518,7 @@ impl StmtVisitor for StmtEvaluator {
             .define(format!("{}", name), callable.clone());
     }
 
-    fn visit_return(&mut self, _keyword: &Token, value: &Option<Expr>) {
+    fn visit_return(&mut self, value: &Option<Expr>) {
         let mut visitor = ExprEvaluator::new(&self.m_env);
         if let Some(value) = value {
             value.accept(&mut visitor);

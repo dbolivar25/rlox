@@ -1,13 +1,15 @@
 use crate::environment::Environment;
-use crate::token::Token;
+use crate::token_v2::TokenType;
 use crate::visitor::ErrorValue;
-use crate::{ast::*, visitor::StmtEvaluator};
+use crate::{ast_v2::*, visitor::StmtEvaluator};
 
 use anyhow::Result;
 use itertools::Itertools;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
+
+type Token = TokenType;
 
 #[derive(Clone)]
 pub enum Callable {
