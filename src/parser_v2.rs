@@ -55,7 +55,7 @@ pub(crate) fn parse_anonymous_function<'a>(
     map(
         tuple((
             preceded(multispace0, tag("fun")),
-            preceded(multispace0, cut(char('('))),
+            preceded(multispace0, char('(')),
             preceded(multispace0, opt(parse_parameters)),
             preceded(multispace0, cut(char(')'))),
             preceded(multispace0, cut(parse_block)),
@@ -326,7 +326,7 @@ pub(crate) fn parse_assignment<'a>(
             separated_pair(
                 parse_identifier,
                 preceded(multispace0, char('=')),
-                preceded(multispace0, cut(parse_assignment)),
+                preceded(multispace0, parse_assignment),
             ),
             |(name, value)| Expr::new_assign(name, Box::new(value)),
         ),
@@ -345,7 +345,7 @@ pub(crate) fn parse_block<'a>(input: &'a str) -> IResult<&'a str, Stmt, VerboseE
         preceded(multispace0, char('{')),
         many_till(
             preceded(multispace0, parse_declaration),
-            preceded(multispace0, cut(char('}'))),
+            preceded(multispace0, char('}')),
         ),
     )(input)
     .map(|(input, (stmts, _))| (input, Stmt::new_block(stmts)))
