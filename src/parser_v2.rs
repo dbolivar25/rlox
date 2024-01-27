@@ -55,7 +55,7 @@ pub(crate) fn parse_anonymous_function<'a>(
     map(
         tuple((
             preceded(multispace0, tag("fun")),
-            preceded(multispace0, char('(')),
+            preceded(multispace0, cut(char('('))),
             preceded(multispace0, opt(parse_parameters)),
             preceded(multispace0, cut(char(')'))),
             preceded(multispace0, cut(parse_block)),
@@ -130,7 +130,7 @@ pub(crate) fn parse_primary<'a>(input: &'a str) -> IResult<&'a str, Expr, Verbos
         map(parse_string, Expr::new_literal),
         parse_anonymous_function,
         map(parse_identifier, Expr::new_variable),
-        map(delimited(char('('), parse_expression, char(')')), |expr| {
+        map(delimited(char('('), parse_expression, cut(char(')'))), |expr| {
             Expr::new_grouping(Box::new(expr))
         }),
     ))(input)
@@ -178,7 +178,7 @@ pub(crate) fn parse_factor<'a>(input: &'a str) -> IResult<&'a str, Expr, Verbose
         many0(map(
             pair(
                 preceded(multispace0, alt((char('*'), char('/')))),
-                preceded(multispace0, parse_unary),
+                preceded(multispace0, cut(parse_unary)),
             ),
             |(op, expr)| match op {
                 '*' => (Token::Star, expr),
@@ -203,7 +203,7 @@ pub(crate) fn parse_term<'a>(input: &'a str) -> IResult<&'a str, Expr, VerboseEr
         many0(map(
             pair(
                 preceded(multispace0, alt((char('+'), char('-')))),
-                preceded(multispace0, parse_factor),
+                preceded(multispace0, cut(parse_factor)),
             ),
             |(op, expr)| match op {
                 '+' => (Token::Plus, expr),
@@ -230,7 +230,7 @@ pub(crate) fn parse_comparison<'a>(
         many0(map(
             pair(
                 preceded(multispace0, alt((tag(">="), tag(">"), tag("<="), tag("<")))),
-                preceded(multispace0, parse_term),
+                preceded(multispace0, cut(parse_term)),
             ),
             |(op, expr)| match op {
                 ">" => (Token::Greater, expr),
@@ -257,7 +257,7 @@ pub(crate) fn parse_equality<'a>(input: &'a str) -> IResult<&'a str, Expr, Verbo
         many0(map(
             pair(
                 preceded(multispace0, alt((tag("!="), tag("==")))),
-                preceded(multispace0, parse_comparison),
+                preceded(multispace0, cut(parse_comparison)),
             ),
             |(op, expr)| match op {
                 "!=" => (Token::BangEqual, expr),
@@ -282,7 +282,7 @@ pub(crate) fn parse_logic_and<'a>(input: &'a str) -> IResult<&'a str, Expr, Verb
         many0(map(
             pair(
                 preceded(multispace0, tag("and")),
-                preceded(multispace0, parse_equality),
+                preceded(multispace0, cut(parse_equality)),
             ),
             |(_, expr)| expr,
         )),
@@ -303,7 +303,7 @@ pub(crate) fn parse_logic_or<'a>(input: &'a str) -> IResult<&'a str, Expr, Verbo
         many0(map(
             pair(
                 preceded(multispace0, tag("or")),
-                preceded(multispace0, parse_logic_and),
+                preceded(multispace0, cut(parse_logic_and)),
             ),
             |(_, expr)| expr,
         )),
@@ -326,7 +326,7 @@ pub(crate) fn parse_assignment<'a>(
             separated_pair(
                 parse_identifier,
                 preceded(multispace0, char('=')),
-                preceded(multispace0, parse_assignment),
+                preceded(multispace0, cut(parse_assignment)),
             ),
             |(name, value)| Expr::new_assign(name, Box::new(value)),
         ),
@@ -345,7 +345,7 @@ pub(crate) fn parse_block<'a>(input: &'a str) -> IResult<&'a str, Stmt, VerboseE
         preceded(multispace0, char('{')),
         many_till(
             preceded(multispace0, parse_declaration),
-            preceded(multispace0, char('}')),
+            preceded(multispace0, cut(char('}'))),
         ),
     )(input)
     .map(|(input, (stmts, _))| (input, Stmt::new_block(stmts)))
@@ -457,7 +457,7 @@ pub(crate) fn parse_var<'a>(input: &'a str) -> IResult<&'a str, Stmt, VerboseErr
             preceded(multispace1, parse_identifier),
             opt(preceded(
                 preceded(multispace0, char('=')),
-                preceded(multispace0, parse_expression),
+                preceded(multispace0, cut(parse_expression)),
             )),
             preceded(multispace0, cut(char(';'))),
         )),
