@@ -62,7 +62,7 @@ management, and interpretation.
 ## Installation
 
 ```
-git clone https://github.com/dbolivar25/rlox.git
+git clone git@github.com:dbolivar25/rlox.git
 cd rlox
 ```
 
